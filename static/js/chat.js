@@ -2312,7 +2312,6 @@ import { invalidateSettings } from './appConfig.js';
     try {
       // Re-enable auto-scroll when user sends a message
       uiModule.setAutoScroll(true);
-      uiModule.scrollHistoryInstant();
       // Clear completed dot now that user is interacting
       if (sessionModule.clearStreamComplete) sessionModule.clearStreamComplete(sessionModule.getCurrentSessionId());
 
@@ -2366,6 +2365,8 @@ import { invalidateSettings } from './appConfig.js';
         }
         _userMsgEl = addMessage('user', userDisplay, null, _bubbleMeta);
       }
+      // Scroll to the user message now that it's in the DOM
+      uiModule.scrollHistoryInstant();
       _sendPerf.mark('user_bubble_visible');
       messageInput.value = approvalForSend ? (approvalForSend.draft || '') : '';
       messageInput.style.height = '';
