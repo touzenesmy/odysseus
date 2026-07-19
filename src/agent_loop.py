@@ -11029,7 +11029,7 @@ def _classify_agent_request(messages: List[Dict], last_user: str) -> Dict[str, o
     ):
         domains = {"web"}
 
-    low_signal = not continuation and not domains
+    low_signal = False  # was: not continuation and not domains — gate was too aggressive; let RAG + keywords handle it
     return {
         "low_signal": low_signal,
         "continuation": continuation,
