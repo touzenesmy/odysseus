@@ -147,6 +147,9 @@ KNOWN_CONTEXT_WINDOWS = {
     'deepseek-r1': 64000,
     'deepseek-v3': 64000,
     'deepseek-v2': 64000,
+    'deepseek-v4': 1000000,
+    'deepseek-v4-pro': 1000000,
+    'deepseek-v4-flash': 1000000,
 
     # --- Google ---
     'gemini-2.5-pro': 1048576,
