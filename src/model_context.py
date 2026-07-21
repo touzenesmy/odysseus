@@ -147,7 +147,9 @@ KNOWN_CONTEXT_WINDOWS = {
     'deepseek-r1': 64000,
     'deepseek-v3': 64000,
     'deepseek-v2': 64000,
-    'deepseek-v4': 64000,
+    'deepseek-v4': 1000000,
+    'deepseek-v4-pro': 1000000,
+    'deepseek-v4-flash': 1000000,
     # Provider aliases used by configured Odysseus endpoints may omit the
     # generation name. Keep them out of the unknown/small-model fallback,
     # which otherwise trims multi-turn tool history to ~1K tokens.
