@@ -202,8 +202,14 @@ KNOWN_CONTEXT_WINDOWS = {
     'minimax': 1000000,
 
     # --- Moonshot / Kimi ---
+    'kimi-k3': 1048576,
+    'kimi-k2.7-code': 262144,
+    'kimi-k2.6': 262144,
+    'kimi-k2.5': 262144,
+    'kimi-k2': 131072,
+    'kimi': 131072,
+    'moonshot-v1': 128000,
     'moonshot': 128000,
-    'kimi': 128000,
 
     # --- Microsoft ---
     'phi-4': 16000,
