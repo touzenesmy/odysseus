@@ -1692,6 +1692,14 @@ def setup_chat_routes(
                             _forced_tools |= set(_BROWSER_MCP_TOOLS)
                     elif _explicit_browser_intent:
                         _forced_tools = set(_BROWSER_MCP_TOOLS)
+                    # Bash toggle ON in agent mode → force-include bash so it
+                    # never silently drops when RAG retrieval misses it.  The
+                    # agent loop filters forced tools against disabled_tools,
+                    # so toggling OFF (allow_bash="false") still strips it.
+                    if allow_bash is not None and str(allow_bash).lower() == "true":
+                        if _forced_tools is None:
+                            _forced_tools = set()
+                        _forced_tools.add("bash")
 
                     async for chunk in stream_agent_loop(
                         sess.endpoint_url,
