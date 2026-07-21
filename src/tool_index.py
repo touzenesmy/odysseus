@@ -42,6 +42,9 @@ ALWAYS_AVAILABLE = frozenset({
     "ask_user",
     # Write back to the active plan (tick steps done / revise) during execution.
     "update_plan",
+    # Bash is the user's primary tool for everything — must always be available
+    # regardless of RAG retrieval results.
+    "bash",
 })
 
 # Tools that the Personal Assistant always has access to during scheduled
