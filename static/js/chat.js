@@ -639,6 +639,21 @@ import { loadPanel } from './panels.js';
            _resumingStreams.has(sessionId);
   }
 
+  /** Purge completed/error background stream entries that are no longer needed. */
+  function _purgeStaleBackgroundStreams() {
+    _backgroundStreams.forEach(function(entry, sid) {
+      if (entry.status === 'completed' || entry.status === 'error') {
+        // Release any held resources before deleting
+        if (entry.abortCtrl) { entry.abortCtrl = null; }
+        entry.accumulated = '';
+        entry.sourcesHtml = '';
+        entry.findingsData = null;
+        entry.metrics = null;
+        _backgroundStreams.delete(sid);
+      }
+    });
+  }
+
   function _getForegroundStreamState() {
     try {
       const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
@@ -1105,6 +1120,8 @@ import { loadPanel } from './panels.js';
    */
   export async function handleChatSubmit(e) {
     e.preventDefault();
+    // Purge stale background stream entries to free accumulated text
+    _purgeStaleBackgroundStreams();
     // Cancel research clarification timeout if active
     if (window._researchTimeoutTimer) {
       clearTimeout(window._researchTimeoutTimer);
@@ -2818,6 +2835,12 @@ import { loadPanel } from './panels.js';
                 } catch (dotErr) {
                   console.warn('[bg-stream] markStreamComplete error:', dotErr);
                 }
+                // Free the large accumulated text — only the status and query
+                // are needed now; checkBackgroundStream reloads from the DB.
+                bgDone.accumulated = '';
+                bgDone.sourcesHtml = '';
+                if (bgDone.abortCtrl) bgDone.abortCtrl = null;
+                _purgeStaleBackgroundStreams();
                 // Don't do foreground final render — the checkBackgroundStream poll
                 // will detect 'completed' and reload history cleanly
                 break;
@@ -4908,6 +4931,7 @@ import { loadPanel } from './panels.js';
     // Store background stream state. A canonical terminal event can precede
     // its SSE error event; preserve completion if the user switches sessions
     // during that gap instead of creating a fresh running/error marker.
+    _purgeStaleBackgroundStreams();
     _backgroundStreams.set(sessionId, {
       status: terminalSaved ? 'completed' : 'running',
       accumulated: currentAccumulated,
