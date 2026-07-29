@@ -582,6 +582,21 @@ import {
            _resumingStreams.has(sessionId);
   }
 
+  /** Purge completed/error background stream entries that are no longer needed. */
+  function _purgeStaleBackgroundStreams() {
+    _backgroundStreams.forEach(function(entry, sid) {
+      if (entry.status === 'completed' || entry.status === 'error') {
+        // Release any held resources before deleting
+        if (entry.abortCtrl) { entry.abortCtrl = null; }
+        entry.accumulated = '';
+        entry.sourcesHtml = '';
+        entry.findingsData = null;
+        entry.metrics = null;
+        _backgroundStreams.delete(sid);
+      }
+    });
+  }
+
   function _getForegroundStreamState() {
     try {
       const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
@@ -994,6 +1009,8 @@ import {
    */
   export async function handleChatSubmit(e) {
     e.preventDefault();
+    // Purge stale background stream entries to free accumulated text
+    _purgeStaleBackgroundStreams();
     // Cancel research clarification timeout if active
     if (window._researchTimeoutTimer) {
       clearTimeout(window._researchTimeoutTimer);
@@ -2593,6 +2610,12 @@ import {
                 } catch (dotErr) {
                   console.warn('[bg-stream] markStreamComplete error:', dotErr);
                 }
+                // Free the large accumulated text — only the status and query
+                // are needed now; checkBackgroundStream reloads from the DB.
+                bgDone.accumulated = '';
+                bgDone.sourcesHtml = '';
+                if (bgDone.abortCtrl) bgDone.abortCtrl = null;
+                _purgeStaleBackgroundStreams();
                 // Don't do foreground final render — the checkBackgroundStream poll
                 // will detect 'completed' and reload history cleanly
                 break;
@@ -4547,6 +4570,7 @@ import {
     // receive another SSE line for an arbitrary amount of time.
     if (active.cancelViewWork) active.cancelViewWork();
     // Store background stream state
+    _purgeStaleBackgroundStreams();
     _backgroundStreams.set(sessionId, {
       status: 'running',
       accumulated: currentAccumulated,

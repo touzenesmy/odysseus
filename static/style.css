@@ -2154,6 +2154,8 @@ body.bg-pattern-sparkles {
       overflow-wrap: break-word;
       overflow: hidden;
       animation: msg-enter 0.3s ease-out both;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 120px;
     }
     .msg-user {
       align-items: flex-end;
@@ -9406,6 +9408,8 @@ body.fullwidth-chat .chat-history {
   overflow: hidden;
   transition: max-height 0.3s ease, padding 0.3s ease;
   padding: 0 12px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
 }
 
 .thinking-content.expanded {
@@ -9752,6 +9756,8 @@ body.fullwidth-chat .chat-history {
 .agent-thread-node {
   position: relative;
   padding: 5px 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
 }
 .agent-thread-node + .agent-thread-node {
   margin-top: 2px;
