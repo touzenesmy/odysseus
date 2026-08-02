@@ -89,6 +89,20 @@ docker compose -f "$COMPOSE_FILE" pull
 
 echo ">> Restarting Odysseus..."
 sudo systemctl stop "$SERVICE"
+echo ">> Checking system dependencies for Python builds..."
+if command -v apt-get &>/dev/null; then
+    BUILD_DEPS="python3-venv python3-dev build-essential libssl-dev libffi-dev"
+    MISSING=""
+    for pkg in $BUILD_DEPS; do
+        dpkg -s "$pkg" &>/dev/null || MISSING="$MISSING $pkg"
+    done
+    if [[ -n "$MISSING" ]]; then
+        echo ">> Installing:$MISSING"
+        sudo apt-get update -qq
+        sudo apt-get install -y $MISSING
+    fi
+fi
+
 echo ">> Updating dependencies..."
 source venv/bin/activate
 pip install -r requirements.txt

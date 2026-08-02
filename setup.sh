@@ -17,6 +17,43 @@ USER_NAME="${USER:-$(whoami)}"
 INSTALL_DIR="${HOME}/odysseus"
 REPO_DIR=""
 
+# ── Step 0: system dependencies ────────────────────────────────────────────
+# Ensures Python, venv, pip, build tools, and git are installed before we
+# try to use them.  Safe to re-run — apt/dnf skip already-installed packages.
+SYSTEM_DEPS="python3 python3-venv python3-pip python3-dev git build-essential libssl-dev libffi-dev"
+
+if command -v apt-get &>/dev/null; then
+    echo ">> Checking system dependencies (apt)..."
+    MISSING=""
+    for pkg in $SYSTEM_DEPS; do
+        dpkg -s "$pkg" &>/dev/null || MISSING="$MISSING $pkg"
+    done
+    if [[ -n "$MISSING" ]]; then
+        echo ">> Installing:$MISSING"
+        sudo apt-get update -qq
+        sudo apt-get install -y $MISSING
+    else
+        echo ">> All system dependencies present"
+    fi
+elif command -v dnf &>/dev/null; then
+    echo ">> Checking system dependencies (dnf)..."
+    sudo dnf install -y python3 python3-pip python3-devel git make automake gcc gcc-c++ openssl-devel libffi-devel kernel-devel 2>/dev/null || true
+    echo ">> System dependencies checked"
+elif command -v pacman &>/dev/null; then
+    echo ">> Checking system dependencies (pacman)..."
+    sudo pacman -S --needed --noconfirm python python-pip python-virtualenv git base-devel openssl libffi 2>/dev/null || true
+    echo ">> System dependencies checked"
+else
+    echo ">> ⚠  Unknown package manager.  Install these manually before continuing:"
+    echo "      $SYSTEM_DEPS"
+fi
+
+# Warn if Docker is missing (non-fatal — you can install it later)
+if ! command -v docker &>/dev/null; then
+    echo ">> ⚠  Docker not found.  Install it before starting the service:"
+    echo "      https://docs.docker.com/engine/install/"
+fi
+
 # ── Step 1: clone or locate the repo ───────────────────────────────────────
 if [[ -d "${HOME}/odysseus/.git" ]]; then
     REPO_DIR="${HOME}/odysseus"
