@@ -2,7 +2,18 @@
 set -euo pipefail
 BRANCH="Improvements"
 PR_NUM=""
-COMPOSE_FILE="docker-compose-baremetal.samy"
+# Auto-detect compose file: prefer baremetal, then GPU variants, fall back to default
+for CF in docker-compose-baremetal.samy docker-compose.gpu-amd.yml docker-compose.gpu-nvidia.yml docker-compose.yml; do
+    if [[ -f "$CF" ]]; then
+        COMPOSE_FILE="$CF"
+        break
+    fi
+done
+
+if [[ -z "${COMPOSE_FILE:-}" ]]; then
+    echo ">> Error: No docker-compose file found (tried baremetal, gpu-amd, gpu-nvidia, default)" >&2
+    exit 1
+fi
 SERVICE="odysseus.service"
 HUB_SERVICE="hub.service"
 REMOTE_URL="https://github.com/touzenesmy/odysseus.git"
