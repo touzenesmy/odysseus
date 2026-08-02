@@ -15,7 +15,6 @@ if [[ -z "${COMPOSE_FILE:-}" ]]; then
     exit 1
 fi
 SERVICE="odysseus.service"
-HUB_SERVICE="hub.service"
 REMOTE_URL="https://github.com/touzenesmy/odysseus.git"
 REMOTE_NAME="touzenesmy"
 cd "$(dirname "$0")"
@@ -121,9 +120,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 deactivate
 sudo systemctl start "$SERVICE"
-
-echo ">> Restarting Hub..."
-sudo systemctl restart "$HUB_SERVICE"
 
 echo ">> Updated. Logs: journalctl -u $SERVICE -f"
 journalctl -u odysseus.service -f
