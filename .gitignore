@@ -120,3 +120,6 @@ compound.config.json
 *.error.log
 _scratch/
 /odysseus/
+
+# Personal baremetal compose files — never push
+docker-compose-baremetal.*
