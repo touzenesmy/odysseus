@@ -81,6 +81,8 @@ else
         esac
     fi
 
+    # Self-heal: if update.sh was locally modified, reset it so the pull can succeed
+    git checkout -- update.sh 2>/dev/null || true
     git checkout -B "$BRANCH" "$REMOTE_NAME/$BRANCH"
 fi
 
