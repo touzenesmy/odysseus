@@ -522,6 +522,7 @@ export function showError(msg) {
  * Throttled during streaming so it doesn't fight user scrolling.
  */
 let _scrollThrottleTimer = null;
+let _lastTargetHeight = 0;
 export function scrollHistory() {
   if (!autoScrollEnabled) return;
   if (!_scrollBox || !_scrollBox.isConnected) {
@@ -539,6 +540,7 @@ export function scrollHistory() {
     _scrollThrottleTimer = null;
   }
   _scrollThrottleTimer = setTimeout(() => { _scrollThrottleTimer = null; }, 500);
+  _lastTargetHeight = _scrollBox.scrollHeight - _scrollBox.clientHeight;
   if (!_scrollRafId) {
     _scrollRafId = requestAnimationFrame(_smoothScrollStep);
   }
@@ -599,9 +601,34 @@ function _smoothScrollStep() {
   const current = box.scrollTop;
   const diff = target - current;
 
+  // If we're far from the bottom and content has grown, the lag is from
+  // new content, not a user scroll-up. Snap to bottom so the lerp doesn't
+  // fall irrecoverably behind (especially when many small tool results
+  // accumulate faster than the 0.2-factor lerp can keep up).
+  const contentGrew = target - _lastTargetHeight;
+  if (diff > 300 && contentGrew > 20) {
+    box.scrollTop = target;
+    _lastTargetHeight = target;
+    _scrollRafId = requestAnimationFrame(_smoothScrollStep);
+    return;
+  }
+
+  // If user scrolled up with no meaningful new content, respect that.
+  if (diff > 300) {
+    _scrollRafId = null;
+    return;
+  }
+
   if (diff <= 1) {
     box.scrollTop = target;
     _scrollRafId = null;
+    // Content may have arrived during the final lerp frame (e.g. last
+    // tool output in a chain). If the true bottom is now lower, restart.
+    const finalTarget = box.scrollHeight - box.clientHeight;
+    if (finalTarget > target + 1) {
+      _lastTargetHeight = finalTarget;
+      _scrollRafId = requestAnimationFrame(_smoothScrollStep);
+    }
     return;
   }
 
