@@ -117,7 +117,7 @@ Type=simple
 User=${USER_NAME}
 WorkingDirectory=${REPO_DIR}
 ExecStartPre=/usr/bin/docker compose -f ${REPO_DIR}/docker-compose.yml up -d
-ExecStartPre=/bin/bash -c 'for i in \$(seq 1 5); do ok=1; for port in 8100 8080 8091 8191 11434 5053; do timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/\$port" 2>/dev/null || ok=0; done; [ \$ok -eq 1 ] && exit 0; sleep 1; done; exit 1'
+ExecStartPre=/bin/bash -c 'for i in \$(seq 1 5); do ok=1; for port in 8100 8080 8091 8191 11434; do timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/\$port" 2>/dev/null || ok=0; done; [ \$ok -eq 1 ] && exit 0; sleep 1; done; exit 1'
 ExecStart=${REPO_DIR}/venv/bin/uvicorn app:app --port 7000 --host 0.0.0.0
 Restart=always
 RestartSec=3
