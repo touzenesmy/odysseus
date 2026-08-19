@@ -77,7 +77,7 @@ else
         echo ""
         echo "!!! WARNING: Local branch '$BRANCH' is $LOCAL_AHEAD commit(s) ahead of $REMOTE_NAME/$BRANCH !!!"
         echo "    Running this script will OVERWRITE those local commits."
-        echo "    Push them first: git push origin $BRANCH"
+        echo "    Push them first: git push $REMOTE_NAME $BRANCH"
         echo ""
         read -rp "    Continue anyway and discard local commits? [y/N]: " FORCE_CHOICE
         case "$FORCE_CHOICE" in
