@@ -674,7 +674,15 @@ async function initVisionSettings() {
         }
       });
     });
-    sortModelIds(visionModels).forEach(mid => {
+    // Rebuild the select idempotently (clear then re-add) so the dropdown can
+    // never double-list: both when /api/models returns the same model id from
+    // more than one endpoint, and if this initializer ever runs more than
+    // once. The other model selects get idempotency via _fillModelSelect;
+    // vision builds its own <option>s inline, so it must clear explicitly.
+    var autoDetectOpt = vlSel.querySelector('option[value=""]');
+    while (vlSel.options.length) vlSel.remove(0);
+    if (autoDetectOpt) vlSel.appendChild(autoDetectOpt);
+    sortModelIds(Array.from(new Set(visionModels))).forEach(mid => {
       var opt = document.createElement('option'); opt.value = mid; opt.textContent = mid; vlSel.appendChild(opt);
     });
   } catch (e) { console.warn('Failed to load models for vision settings', e); }
