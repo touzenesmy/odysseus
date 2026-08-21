@@ -55,6 +55,7 @@ _VISION_MODEL_KEYWORDS = (
     # the safer failure than silently dropping a real image.
     "gemma-3", "gemma3", "gemma-4", "gemma4",
     "llama-4", "llama4",
+    "qwen3.5", "qwen-3.5",
     "mistral-small-3.1", "mistral-small3.1", "mistral-small-3.2", "mistral-small3.2",
     # Microsoft Phi-4 ships a dedicated multimodal variant ("phi-4-multimodal-instruct")
     # but users often load it under the bare "phi-4" or "phi4" Ollama tag.
