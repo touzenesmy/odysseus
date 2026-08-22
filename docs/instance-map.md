@@ -1,4 +1,4 @@
-## Instance map — Odysseus project on Improvements branch (as of 2026-08-20)
+## Instance map — Odysseus project on Improvements branch (as of 2026-08-22)
 This maps the layout of the active Improvements branch. It is NOT a table of contents for the codebase; rather, it is a reference for what pieces exist where when custom features are added or removed. Use it to understand the current state after merges, resets, and personal patches. When comparing against the tree, verify each path with git ls-tree HEAD or ls -R; do not assume. When adding a new feature, update this map to show the new file(s) and their purpose.
 
 ### Frontend static assets and runtime behavior
