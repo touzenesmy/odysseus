@@ -178,11 +178,37 @@ def _quant_bytes_per_param(quant):
 
 def _infer_context(repo_id, pipeline_tag):
     text = f"{repo_id or ''} {pipeline_tag or ''}".lower()
-    if any(k in text for k in ("whisper", "asr", "speech-recognition", "tts", "audio", "image", "video", "diffusion")):
+    pt = (pipeline_tag or "").lower()
+
+    # Single-modality generators / recognizers (diffusion, TTS, ASR, audio or
+    # vision classifiers) have no meaningful long-context window — 4096 is a
+    # generous placeholder for them. Crucially, multimodal LLMs
+    # ("image-text-to-text" / "video-text-to-text": Qwen-VL, Qwen3.8, LLaVA,
+    # Kimi-VL, GLM-*V, etc.) are full LLMs with large context windows and must
+    # NOT land here. A bare "image"/"video" substring test used to catch
+    # "image-text-to-text" and wrongly clamp those VLMs to 4k tokens in the
+    # serve UI (e.g. editing Qwen3.8-27B's context snapped it back to 4096).
+    if pt in (
+        "text-to-image", "text-to-video", "image-to-image", "image-to-video",
+        "text-to-audio", "text-to-speech", "audio-to-audio",
+        "automatic-speech-recognition", "audio-classification",
+        "image-classification", "image-segmentation", "object-detection",
+        "image-feature-extraction", "video-classification",
+        "zero-shot-image-classification", "depth-estimation",
+    ) or any(k in text for k in ("whisper", "asr", "speech-recognition", "tts", "text-to-speech", "diffusion")):
         return 4096
+
+    # Huge-context flagships.
     if any(k in text for k in ("glm-5.2", "deepseek-v4", "minimax-m3")):
         return 1_000_000
+
+    # Long-context LLM families. The big dense / MoE models (27B and up, plus
+    # the 122B/235B/397B flagships) train with 128k–256k context, so give them
+    # a permissive 262144 cap — otherwise the serve UI clamps an edited 128k
+    # context back down. Smaller/unknown models keep the conservative 32k floor.
     if any(k in text for k in ("qwen3", "glm", "deepseek", "minimax")):
+        if re.search(r"(?:27b|30b|32b|35b|72b|80b|110b|122b|235b|397b|2\.4t)", text):
+            return 262144
         return 32768
     return 32768
 
