@@ -1730,6 +1730,7 @@ function _rerenderCachedModels() {
 
       // Group 1 — GPU placement (GPU-only, hides in CPU mode)
       panelHtml += `<div class="hwfit-serve-row hwfit-backend-llamacpp cookbook-llama-gpu-only hwfit-llama-placement-row">`;
+      panelHtml += `<label>${_l('GPU Layers','-ngl: layers offloaded to GPU. 99 = all. Lower (e.g. 50) spills the rest to CPU RAM to free VRAM for a vision projector or longer context. Blank = auto (99 on GPU, 0 on CPU).')}<input type="number" class="hwfit-sf" data-field="ngl" value="${esc(sv('ngl',''))}" placeholder="99" min="0" max="999" /></label>`;
       panelHtml += `<label>${_l('Split Mode','llama.cpp GPU placement. layer = default; tensor splits weights and KV across GPUs.')}<select class="hwfit-sf" data-field="llama_split_mode">${llamaSplitModeOpts}</select></label>`;
       panelHtml += `<label>${_l('Tensor Split','GPU proportions, e.g. 50,50 across two GPUs. Blank = auto.')}<input type="text" class="hwfit-sf" data-field="llama_tensor_split" value="${esc(sv('llama_tensor_split', ''))}" placeholder="auto" /></label>`;
       panelHtml += `<label>${_l('Main GPU','--main-gpu index inside the visible GPU set. Useful for split mode none/row.')}<input type="text" class="hwfit-sf" data-field="llama_main_gpu" value="${esc(sv('llama_main_gpu', ''))}" placeholder="auto" /></label>`;
@@ -1747,6 +1748,7 @@ function _rerenderCachedModels() {
       panelHtml += `<label>${_l('Batch','llama.cpp prompt batch size. Blank = default.')}<input type="text" class="hwfit-sf" data-field="llama_batch_size" value="${esc(sv('llama_batch_size', ''))}" placeholder="2048" /></label>`;
       panelHtml += `<label>${_l('UBatch','llama.cpp physical micro-batch size. Blank = default.')}<input type="text" class="hwfit-sf" data-field="llama_ubatch_size" value="${esc(sv('llama_ubatch_size', ''))}" placeholder="512" /></label>`;
       panelHtml += `<label>${_l('Parallel','llama.cpp parallel slots. Blank = default; 1 matches single-lane presets.')}<input type="text" class="hwfit-sf" data-field="llama_parallel" value="${esc(sv('llama_parallel', ''))}" placeholder="1" /></label>`;
+      panelHtml += `<label>${_l('Max Tokens','-n / --n-predict: maximum tokens to generate per response. Blank = llama.cpp default.')}<input type="text" class="hwfit-sf" data-field="n_predict" value="${esc(sv('n_predict',''))}" placeholder="default" /></label>`;
       panelHtml += `</div>`;
       // Auto-profile chips row removed — visual fit with the rest of the
       // serve panel was off, and the manual ctx/n_cpu_moe/cache controls
@@ -2372,6 +2374,8 @@ function _rerenderCachedModels() {
             llama_split_mode: _ex(/(?:--split-mode|-sm)\s+(none|layer|row|tensor)/) || '',
             llama_tensor_split: _ex(/(?:--tensor-split|-ts)\s+([0-9.,]+)/) || '',
             llama_main_gpu: _ex(/(?:--main-gpu|-mg)\s+(\d+)/) || '',
+            ngl: _ex(/-ngl\s+(\d+)/) || '',
+            n_predict: _ex(/(?:--n-predict|-n)\s+(\d+)/) || '',
             llama_parallel: _ex(/(?:--parallel|-np)\s+(\d+)/) || '',
             llama_batch_size: _ex(/(?:--batch-size|-b)\s+(\d+)/) || '',
             llama_ubatch_size: _ex(/(?:--ubatch-size|-ub)\s+(\d+)/) || '',
@@ -2454,6 +2458,18 @@ function _rerenderCachedModels() {
         updateBackendVisibility();
         updateRuntimeReadinessNote();
         updateCmd();
+        // A preset saved with a hand-edited command must restore that exact
+        // command, not the auto-rebuilt one. Rebuild first (so _gguf_path /
+        // _mmproj_path / the vision warning are computed), then overwrite with
+        // the saved manual cmd and flag the box as hand-edited so later field
+        // edits don't silently clobber it.
+        const _savedManualCmd = String((p.fields && p.fields._manual_cmd) || '').trim();
+        if (_savedManualCmd) {
+          const _ce = panel.querySelector('.hwfit-serve-cmd');
+          panel._cmd = _savedManualCmd;
+          if (_ce) { _ce.value = _formatServeCmdPreview(_savedManualCmd); _ce.style.height = 'auto'; _ce.style.height = _ce.scrollHeight + 'px'; }
+          _cmdManuallyEdited = true;
+        }
         panel.querySelectorAll('.cookbook-slot-btn').forEach(b => b.classList.remove('active'));
         panel.querySelector(`.cookbook-slot-btn[data-slot="${slotIdx}"]`)?.classList.add('active');
       }
