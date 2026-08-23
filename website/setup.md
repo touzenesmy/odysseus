@@ -94,6 +94,40 @@ unless you opt in.
 serve engines live in `./data/local` (`~/.local` in the container), so they
 survive container recreation.
 
+**Cookbook Serve panel (llama.cpp) — the fields that matter.**
+
+- **GPU Layers** (`-ngl`) — how many transformer layers to offload to the
+  GPU. `99` = all layers (default when a GPU is selected). Lower it (e.g. `50`)
+  to spill the remaining layers into CPU RAM, which frees VRAM for the vision
+  projector (`--mmproj`) or a longer context on a tight card. Blank = auto
+  (`99` on GPU, `0` on CPU-only).
+- **Max Tokens** (`--n_predict`) — maximum tokens generated per response.
+  Blank = llama.cpp default. Independent from Context, which is the window
+  size (`-c`).
+- **KV Cache** — quantizes the KV cache (`--cache-type-k/v`). `q8_0` is the
+  usual long-context choice; `q4_0` is the smallest; blank = full precision.
+- **Vision** — serve with the image encoder. Auto-finds an `mmproj-*.gguf`
+  next the model and adds `--mmproj` to the launch command. Costs roughly
+  1 GB of extra VRAM.
+
+**Serve panel Context field — why an edit can snap back.** The Context
+(`-c`) input clamps on blur to the model's trained limit, resolved from the
+hwfit profiles API (`/api/hwfit/profiles` → `model_ctx_max`) and, failing
+that, the built-in per-model table, with a final absolute cap of 1,048,576
+tokens. If a model's limit is unknown, anything up to the absolute cap
+sticks; if a limit is known, values above it are clamped down and the input
+shows the reason on hover ("Capped to …").
+
+Note: multimodal LLMs (`image-text-to-text` / `video-text-to-text` — Qwen-VL,
+Qwen3.x-27B+, GLM-4V, Kimi-VL, LLaVA, …) are full LLMs with large context
+windows and must never be clamped to 4096. An earlier heuristic matched the
+`image` substring in `image-text-to-text` and wrongly capped those models at
+4k tokens, making Context edits snap back to 4096. That is fixed — 4096 is
+now reserved for genuine single-modality generators/recognizers (diffusion,
+TTS, ASR, audio/vision classifiers), and the big Qwen3.x / GLM / DeepSeek /
+MiniMax families (27B+ and the flagships) resolve to a 262144 cap, so a 128k
+context setting is accepted.
+
 **Remote servers.** In **Cookbook -> Settings -> Servers**, generate the
 Odysseus SSH key and add the public key to the remote server's
 `~/.ssh/authorized_keys`. From the host you can also run:
