@@ -888,6 +888,11 @@ export function _buildServeCmd(f, modelName, backend) {
     if (_llamaBatch) _lcExtra += ` --batch-size ${_llamaBatch}`;
     const _llamaUBatch = _llamaNum(f.llama_ubatch_size);
     if (_llamaUBatch) _lcExtra += ` --ubatch-size ${_llamaUBatch}`;
+    const _llamaNPredict = _llamaNum(f.n_predict);
+    if (_llamaNPredict) {
+      _lcExtra += ` -n ${_llamaNPredict}`;
+      _lcpExtra += ` --n_predict ${_llamaNPredict}`;
+    }
     if (f.llama_speculative_mtp) {
       const specTokens = parseInt(f.llama_spec_tokens, 10);
       const specN = Number.isFinite(specTokens) && specTokens > 0 ? specTokens : 3;
