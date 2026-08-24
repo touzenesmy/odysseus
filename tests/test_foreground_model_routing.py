@@ -70,6 +70,37 @@ def _allow_tools_for_routing_fixtures(monkeypatch):
         lambda self, *args, **kwargs: ToolGateDecision(True),
         raising=False,
     )
+class _NoSkills:
+    """Stub skill library: no skills, no index, no matches.
+
+    Routing tests must not read the developer's real skill library. The
+    tool-approval gate (upstream #6124) arms itself when untrusted context
+    is present in the prompt — injected skills count as untrusted context —
+    which made agent-loop tests stall at the approval prompt after round 1
+    instead of exercising the routing under test.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def load(self, *args, **kwargs):
+        return []
+
+    def get_relevant_skills(self, *args, **kwargs):
+        return []
+
+    def record_use(self, *args, **kwargs):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_skill_library(monkeypatch):
+    """Keep this file hermetic: agent_loop lazy-imports SkillsManager at
+    call time, so patching the module attribute covers every injection
+    site (matched-skill block, skill index, tool-set seeding)."""
+    import services.memory.skills as skills_mod
+    monkeypatch.setattr(skills_mod, "SkillsManager", _NoSkills)
+    yield
 
 
 class _EmptyQuery:
