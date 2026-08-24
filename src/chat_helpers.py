@@ -157,17 +157,75 @@ def lmstudio_supports_vision(url: str, model: str) -> Optional[bool]:
     return None
 
 
+def llama_cpp_supports_vision(url: str) -> Optional[bool]:
+    """Probe a llama.cpp / llama-server endpoint for native vision support.
+
+    llama-server exposes its single served model's modalities at ``/props``
+    (``{"modalities": {"vision": true, ...}}``) and, when the OpenAI-compat
+    layer is enabled, a capabilities list at ``/v1/models``
+    (``{"models": [{"capabilities": ["multimodal", ...]}]}``).
+
+    Returns None when the endpoint isn't a local llama-server or is unreachable,
+    so callers fall back to name-based detection. Unlike LM Studio's
+    ``/api/v1/models`` (``architecture`` + ``key`` shape), llama-server's list is
+    the standard OpenAI ``data[]``/``models[]`` shape, so we look for a
+    "multimodal"/"vision" capability instead of a per-model architecture dict.
+    """
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    # Never probe a remote provider; llama-server is always a local/LAN host.
+    if not _is_local_host(host):
+        return None
+    authority = host if parsed.port is None else f"{host}:{parsed.port}"
+    scheme = parsed.scheme or "http"
+
+    # /props is the authoritative single-model report.
+    try:
+        r = httpx.get(f"{scheme}://{authority}/props", timeout=1.0)
+        if r.is_success:
+            data = r.json()
+            mods = data.get("modalities")
+            if isinstance(mods, dict) and "vision" in mods:
+                return bool(mods.get("vision"))
+    except Exception:
+        pass
+
+    # Fall back to the OpenAI-compat model list capabilities.
+    try:
+        r = httpx.get(f"{scheme}://{authority}/v1/models", timeout=1.0)
+        if r.is_success:
+            data = r.json()
+            for m in (data.get("models") or []):
+                caps = m.get("capabilities")
+                if isinstance(caps, list) and any(c in caps for c in ("multimodal", "vision")):
+                    return True
+    except Exception:
+        pass
+
+    return None
+
+
 def model_supports_vision(model_name: str, endpoint_url: str = "") -> bool:
-    """Whether a model accepts images, using the endpoint's reported
-    capability when available (LM Studio) and falling back to name-based
-    detection otherwise."""
+    """Whether a model accepts images, independent of vendor or model name.
+
+    Capability-driven and provider-agnostic: probes the endpoint for what it
+    actually serves (LM Studio or llama.cpp/llama-server) and only falls back to
+    name-based detection when no probe can determine it. Swapping the local
+    model or the API model therefore needs no code change — the capability is
+    read at call time.
+    """
     if endpoint_url:
-        try:
-            advertised = lmstudio_supports_vision(endpoint_url, model_name or "")
-        except Exception:
-            advertised = None
-        if advertised is not None:
-            return advertised
+        probes = (
+            (lmstudio_supports_vision, (endpoint_url, model_name or "")),
+            (llama_cpp_supports_vision, (endpoint_url,)),
+        )
+        for probe, args in probes:
+            try:
+                advertised = probe(*args)
+            except Exception:
+                advertised = None
+            if advertised is not None:
+                return advertised
     return is_vision_model(model_name)
 
 

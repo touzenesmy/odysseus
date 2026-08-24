@@ -79,6 +79,46 @@ class TestLmStudioSupportsVision:
 
 
 # ════════════════════════════════════════════════════════════
+# llama_cpp_supports_vision — llama-server /props + /v1/models
+# ════════════════════════════════════════════════════════════
+
+class TestLlamaCppSupportsVision:
+    URL = "http://localhost:8050/v1/chat/completions"
+
+    def test_props_modalities_vision_true(self, monkeypatch):
+        monkeypatch.setattr(chat_helpers.httpx, "get",
+                            lambda url, timeout=None: _FakeResponse({"modalities": {"vision": True, "video": True}}))
+        assert chat_helpers.llama_cpp_supports_vision(self.URL) is True
+
+    def test_props_modalities_vision_false(self, monkeypatch):
+        monkeypatch.setattr(chat_helpers.httpx, "get",
+                            lambda url, timeout=None: _FakeResponse({"modalities": {"vision": False}}))
+        assert chat_helpers.llama_cpp_supports_vision(self.URL) is False
+
+    def test_falls_back_to_v1_models_capabilities(self, monkeypatch):
+        def fake_get(url, timeout=None):
+            if url.endswith("/props"):
+                return _FakeResponse({"error": "not found"}, ok=False)
+            return _FakeResponse({"models": [{"name": "qwen3.8-27b", "capabilities": ["completion", "multimodal"]}]})
+        monkeypatch.setattr(chat_helpers.httpx, "get", fake_get)
+        assert chat_helpers.llama_cpp_supports_vision(self.URL) is True
+
+    def test_no_vision_signal_returns_none(self, monkeypatch):
+        monkeypatch.setattr(chat_helpers.httpx, "get",
+                            lambda url, timeout=None: _FakeResponse({"models": [{"name": "plain", "capabilities": ["completion"]}]}))
+        assert chat_helpers.llama_cpp_supports_vision(self.URL) is None
+
+    def test_remote_endpoint_never_probed(self, monkeypatch):
+        calls = {"n": 0}
+        def tracking_get(url, timeout=None):
+            calls["n"] += 1
+            return _FakeResponse({})
+        monkeypatch.setattr(chat_helpers.httpx, "get", tracking_get)
+        assert chat_helpers.llama_cpp_supports_vision("https://api.openai.com/v1/chat/completions") is None
+        assert calls["n"] == 0
+
+
+# ════════════════════════════════════════════════════════════
 # model_supports_vision — endpoint capability wins, name is fallback
 # ════════════════════════════════════════════════════════════
 
@@ -102,3 +142,10 @@ class TestModelSupportsVision:
         monkeypatch.setattr(chat_helpers, "lmstudio_supports_vision", lambda url, m: None)
         assert chat_helpers.model_supports_vision("qwen2-vl-7b", "http://host/v1") is True
         assert chat_helpers.model_supports_vision("plain-llm", "http://host/v1") is False
+
+    def test_llamacpp_capability_wins_over_name(self, monkeypatch):
+        # A vision model under a name the heuristic can't see, served by llama-server.
+        monkeypatch.setattr(chat_helpers, "is_vision_model", lambda n: False)
+        monkeypatch.setattr(chat_helpers, "lmstudio_supports_vision", lambda url, m: None)
+        monkeypatch.setattr(chat_helpers, "llama_cpp_supports_vision", lambda url: True)
+        assert chat_helpers.model_supports_vision("qwen3.8-27b-gguf", "http://localhost:8050/v1") is True
