@@ -84,7 +84,7 @@ def test_vision_analysis_uses_owner_scoped_primary_and_fallback(monkeypatch, tmp
         500,
     )
     assert seen["llm"][4] == 3000
-    assert seen["llm"][5] == {"chat_template_kwargs": {"enable_thinking": False}}
+    assert seen["llm"][5] is None
 
 
 def test_request_vision_call_sites_pass_owner():
