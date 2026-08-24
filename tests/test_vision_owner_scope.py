@@ -87,6 +87,62 @@ def test_vision_analysis_uses_owner_scoped_primary_and_fallback(monkeypatch, tmp
     assert seen["llm"][5] is None
 
 
+def test_vision_analysis_uses_configured_timeout_and_max_tokens(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake_resolve_vl_model(configured, owner=None):
+        return ("http://primary.test/chat/completions", "vision-primary", {})
+
+    def fake_fallbacks(owner=None):
+        return []
+
+    def fake_llm_call(url, model, messages, headers=None, timeout=None,
+                      max_tokens=None, extra_body=None):
+        seen["llm"] = (timeout, max_tokens)
+        return "description"
+
+    monkeypatch.setattr(dp, "_load_vl_settings", lambda: {
+        "vision_enabled": True, "vision_model": "gpt-4o",
+        "vision_timeout": 600, "vision_max_tokens": 4000,
+    })
+    monkeypatch.setattr(dp, "_resolve_vl_model", fake_resolve_vl_model)
+    monkeypatch.setattr(dp, "llm_call", fake_llm_call)
+
+    from src import endpoint_resolver
+
+    monkeypatch.setattr(endpoint_resolver, "resolve_vision_fallback_candidates", fake_fallbacks)
+
+    image = tmp_path / "image.png"
+    image.write_bytes(b"not-a-real-png-but-base64-is-enough")
+
+    assert dp.analyze_image_with_vl_result(str(image), owner="alice")["text"] == "description"
+    assert seen["llm"] == (600, 4000)
+
+
+def test_localmodel_conf_overrides_parse_only_owned_keys(monkeypatch, tmp_path):
+    conf = tmp_path / "boot-model.conf"
+    conf.write_text(
+        "# leading comment\n"
+        "VISION_TIMEOUT=\"777\"  # quoted + inline comment\n"
+        "VISION_MAX_TOKENS=9000\n"
+        "VISION_TIMEOUT_BAD=123\n"
+        "SERVE_OPTS=\"-ngl 45 -c 85096\"\n"
+        "\n"
+    )
+    monkeypatch.setattr(dp, "_localmodel_conf_path", lambda: str(conf))
+    assert dp._vl_overrides_from_localmodel_conf() == {
+        "vision_timeout": 777,
+        "vision_max_tokens": 9000,
+    }
+
+
+def test_localmodel_conf_overrides_ignore_bad_values(monkeypatch, tmp_path):
+    conf = tmp_path / "boot-model.conf"
+    conf.write_text("VISION_TIMEOUT=abc\nVISION_MAX_TOKENS=\n")
+    monkeypatch.setattr(dp, "_localmodel_conf_path", lambda: str(conf))
+    assert dp._vl_overrides_from_localmodel_conf() == {}
+
+
 def test_request_vision_call_sites_pass_owner():
     chat_source = (ROOT / "src" / "chat_handler.py").read_text()
     processor_source = (ROOT / "src" / "document_processor.py").read_text()
