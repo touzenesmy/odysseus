@@ -1401,12 +1401,30 @@ export async function _syncFromServer() {
     for (const [id, ts] of Object.entries(serverTombstones)) {
       if (localTombstones[id] == null || Number(ts) > Number(localTombstones[id])) mergedTombstones[id] = ts;
     }
+    // A task the server reports as LIVE (running/queued/ready) is by
+    // definition not "removed" — drop any tombstone for it (browser-local or
+    // server-side) so a stale removal, e.g. a GUI Stop parked in localStorage
+    // that never reached the server, can't keep hiding a running model forever.
+
+    const liveServerIds = new Set(serverTasks
+      .filter(t => t && ['running', 'queued', 'ready'].includes(t.status))
+      .map(t => t && t.sessionId)
+      .filter(Boolean));
+    for (const id of liveServerIds) delete mergedTombstones[id];
     _saveTombstones(mergedTombstones);
 
     const localIds = new Set(localTasks.map(t => t.sessionId));
-    const merged = localTasks.filter(t => !_isTombstoned(t.sessionId));
+    const merged = localTasks.filter(t => !liveServerIds.has(t.sessionId) && !_isTombstoned(t.sessionId));
     for (const t of serverTasks) {
-      if (!localIds.has(t.sessionId) && !_isTombstoned(t.sessionId)) {
+      if (!t || !t.sessionId) continue;
+      if (liveServerIds.has(t.sessionId)) {
+        // Refresh a stale local copy (e.g. stuck at 'stopped'/'error' from
+        // before a reboot) with the live server status so the card shows as
+        // running/ready instead of hiding or looking dead.
+        const idx = merged.findIndex(m => m && m.sessionId === t.sessionId);
+        if (idx >= 0) merged[idx] = { ...merged[idx], ...t, status: t.status };
+        else merged.push(t);
+      } else if (!localIds.has(t.sessionId) && !_isTombstoned(t.sessionId)) {
         merged.push(t);
       }
     }
@@ -4123,8 +4141,33 @@ async function _pollBackgroundStatus() {
           const localIds = new Set(localTasks.map(t => t.sessionId));
           const merged = [...localTasks];
           let added = 0;
+          // Same live-task rule as _syncFromServer: a task the server reports
+          // as running/queued/ready must surface even if a stale tombstone
+          // (browser-local) would otherwise hide it.
+          const liveIds = new Set(serverTasks
+            .filter(t => t && ['running', 'queued', 'ready'].includes(t.status))
+            .map(t => t && t.sessionId)
+            .filter(Boolean));
+          const tomb = _loadTombstones();
+          let tombChanged = false;
+          for (const id of liveIds) {
+            if (tomb[id] != null) { delete tomb[id]; tombChanged = true; }
+          }
+          if (tombChanged) _saveTombstones(tomb);
           for (const t of serverTasks) {
-            if (t && t.sessionId && !localIds.has(t.sessionId) && !_isTombstoned(t.sessionId)) {
+            if (!t || !t.sessionId) continue;
+            if (liveIds.has(t.sessionId)) {
+              const idx = merged.findIndex(m => m && m.sessionId === t.sessionId);
+              if (idx >= 0) {
+                if (['running', 'queued', 'ready'].includes(t.status) && merged[idx].status !== t.status) {
+                  merged[idx] = { ...merged[idx], ...t, status: t.status };
+                  added++;
+                }
+              } else {
+                merged.push(t);
+                added++;
+              }
+            } else if (!localIds.has(t.sessionId) && !_isTombstoned(t.sessionId)) {
               merged.push(t);
               added++;
             }
