@@ -2708,6 +2708,7 @@ import { invalidateSettings } from './appConfig.js';
         query: streamQuery,
         startedAt: Date.now(),
         lastActivity: Date.now(),
+        firstOutputAt: null, // Set when the first data event arrives — guards tab-recovery during prefill
         // Resolve the mutable closure at call time: live-thinking helpers are
         // installed after the stream entry is registered.
         cancelViewWork: () => _cancelLiveThinkingWork(),
@@ -3815,6 +3816,8 @@ import { invalidateSettings } from './appConfig.js';
         _clientTtftSeconds = Number(((performance.now() - _ttftStartedAt) / 1000).toFixed(3));
         _stopTtftDisplay();
         clearFirstTokenWaitTimers();
+        const _entry = _activeStreams.get(streamSessionId);
+        if (_entry) _entry.firstOutputAt = Date.now();
       };
 
       streamReadLoop:
@@ -6106,6 +6109,10 @@ import { invalidateSettings } from './appConfig.js';
       });
       if (!_getForegroundStreamState() || _backgroundStreams.has(sid)) return;
       if (res.status !== 404) return;
+      // Prefill guard (d691f57c, re-anchored on the new watchdog): if no first
+      // token has arrived, a 404 is ambiguous (stream may have been reaped
+      // mid-prefill) — don't abort a stream that never produced output here.
+      if (!active.firstOutputAt) return;
 
       console.warn('[stream-watchdog] Local stream was stale and server has no active stream. Unlocking composer.');
       if (active.abortCtrl && !active.abortCtrl.signal.aborted) {
