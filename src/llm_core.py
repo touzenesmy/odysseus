@@ -255,7 +255,8 @@ def _cache_header_identity(headers) -> str:
 def _get_cache_key(url: str, model: str, messages: List[Dict],
                    temperature: float, max_tokens: int, headers=None,
                    thinking_mode: Optional[str] = None,
-                   reasoning_effort: Optional[str] = None) -> str:
+                   reasoning_effort: Optional[str] = None,
+                   extra_body: Optional[Dict] = None) -> str:
     """Generate a cache key partitioned by endpoint and credential identity."""
     hashable_messages = []
     for msg in messages:
@@ -270,6 +271,7 @@ def _get_cache_key(url: str, model: str, messages: List[Dict],
         'max_tokens': max_tokens,
         'thinking_mode': _normalize_thinking_mode(thinking_mode),
         'reasoning_effort': str(reasoning_effort or "").strip().lower(),
+        'extra_body': extra_body,
         # Never put credentials in a cache key or loggable cache payload.  The
         # digest only prevents responses from one configured account/route
         # being returned under another route with the same URL and model.
@@ -2286,7 +2288,8 @@ def llm_call(url: str, model: str, messages: List[Dict], temperature: float = LL
              max_tokens: int = LLMConfig.DEFAULT_MAX_TOKENS, headers: Optional[Dict] = None,
              timeout: int = LLMConfig.DEFAULT_TIMEOUT, prompt_type: Optional[str] = None,
              thinking_mode: Optional[str] = None,
-             reasoning_effort: Optional[str] = None) -> str:
+             reasoning_effort: Optional[str] = None,
+             extra_body: Optional[Dict] = None) -> str:
     """Synchronous LLM call with optional prompt type enhancement."""
     h = _provider_headers(_detect_provider(url))
     # Tolerate headers that arrive as a JSON string (some sessions stored them
@@ -2319,6 +2322,7 @@ def llm_call(url: str, model: str, messages: List[Dict], temperature: float = LL
     cache_key = _get_cache_key(
         url, model, messages_copy, temperature, max_tokens, headers=headers,
         thinking_mode=thinking_mode, reasoning_effort=reasoning_effort,
+        extra_body=extra_body,
     )
     cached_response = _get_cached_response(cache_key)
     if cached_response:
@@ -2356,6 +2360,8 @@ def llm_call(url: str, model: str, messages: List[Dict], temperature: float = LL
         _apply_deepseek_v4_reasoning_defaults(
             payload, target_url, model, thinking_mode
         )
+        if extra_body and _is_self_hosted_openai_compatible(target_url):
+            payload.update(extra_body)
         if provider == "mistral" and _supports_thinking(model):
             payload["reasoning_effort"] = _MISTRAL_REASONING_EFFORT
         _apply_explicit_nonstream_reasoning_effort(payload, reasoning_effort)
