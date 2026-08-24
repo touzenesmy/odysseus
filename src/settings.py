@@ -51,6 +51,13 @@ DEFAULT_SETTINGS = {
     "vision_enabled": True,
     # Ordered fallback chain for the Vision model (image analysis, OCR, tagging).
     "vision_model_fallbacks": [],
+    # Vision-model generation budget: max wall-clock seconds and max output
+    # tokens per image-analysis call. Defaults are high on purpose — local
+    # reasoning VLMs (Qwen3, etc.) are slow — and both are tunable in
+    # Settings → Vision and overridable from the localmodel boot config
+    # (VISION_TIMEOUT / VISION_MAX_TOKENS).
+    "vision_timeout": 500,
+    "vision_max_tokens": 3000,
     # Public base URL used to build clickable deep-links in outgoing alerts
     # (e.g., urgency alert email). Example: "https://chat.example.com"
     "app_public_url": "",

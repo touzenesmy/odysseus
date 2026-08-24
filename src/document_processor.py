@@ -294,13 +294,88 @@ def strip_pdf_content_marker(text: str) -> str:
     return (text or "").removeprefix(_PDF_CONTENT_MARKER).strip()
 
 
+_LOCALMODEL_CONF_ENV = "ODYSSEUS_LOCALMODEL_CONF"
+_VL_TIMEOUT_DEFAULT = 500
+_VL_MAX_TOKENS_DEFAULT = 3000
+
+
+def _safe_int(value, default: int) -> int:
+    """Coerce a setting to int, falling back on ``default`` when unset/garbage."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _localmodel_conf_path() -> str | None:
+    """Path to the optional localmodel boot config (VL override layer).
+
+    Resolution order: ``ODYSSEUS_LOCALMODEL_CONF`` env override, else a sibling
+    ``localmodel/boot-model.conf`` next to the app root. Returns None when no
+    config exists so the override layer is a no-op on installs that lack it.
+    """
+    env = os.environ.get(_LOCALMODEL_CONF_ENV)
+    if env:
+        return env if os.path.isfile(env) else None
+    try:
+        from src.runtime_paths import get_app_root
+    except Exception:
+        return None
+    candidate = os.path.abspath(
+        os.path.join(get_app_root(), os.pardir, "localmodel", "boot-model.conf")
+    )
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _vl_overrides_from_localmodel_conf() -> dict:
+    """Read ``VISION_TIMEOUT`` / ``VISION_MAX_TOKENS`` from the localmodel boot config.
+
+    The conf is a shell-sourced ``KEY=VALUE`` file. We parse only the two keys we
+    own and ignore anything unparseable, so a malformed file can never break
+    vision analysis. Values here win over the Settings GUI (belt + suspenders).
+    """
+    path = _localmodel_conf_path()
+    if not path:
+        return {}
+    overrides = {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                # drop inline comment first, then whitespace, then quotes —
+                # the order matters for lines like `VISION_TIMEOUT="500" # note`
+                val = val.split("#", 1)[0].strip().strip('"').strip("'")
+                if not val:
+                    continue
+                try:
+                    if key == "VISION_TIMEOUT":
+                        overrides["vision_timeout"] = int(val)
+                    elif key == "VISION_MAX_TOKENS":
+                        overrides["vision_max_tokens"] = int(val)
+                except ValueError:
+                    continue
+    except OSError:
+        pass
+    return overrides
+
+
 def _load_vl_settings() -> dict:
-    """Load admin settings from disk."""
+    """Load admin settings, then layer localmodel conf overrides on top."""
+    settings = {}
     try:
         from src.settings import load_settings
-        return load_settings()
+        settings = load_settings()
     except Exception:
-        return {}
+        settings = {}
+    try:
+        settings = {**settings, **_vl_overrides_from_localmodel_conf()}
+    except Exception:
+        pass
+    return settings
 
 
 def _resolve_vl_model(configured: str, owner: str | None = None) -> tuple:
@@ -338,6 +413,8 @@ def analyze_image_with_vl_result(image_path: str, owner: str | None = None) -> d
         if not settings.get("vision_enabled", True):
             return {"text": "[Vision is disabled — enable it in Settings → Vision]", "model": ""}
         vl_model = settings.get("vision_model", "")
+        vl_timeout = _safe_int(settings.get("vision_timeout"), _VL_TIMEOUT_DEFAULT)
+        vl_max_tokens = _safe_int(settings.get("vision_max_tokens"), _VL_MAX_TOKENS_DEFAULT)
 
         try:
             url, model_id, headers = _resolve_vl_model(vl_model, owner=owner)
@@ -374,7 +451,7 @@ def analyze_image_with_vl_result(image_path: str, owner: str | None = None) -> d
             try:
                 description = llm_call(
                     _url, _model, vl_messages, headers=_headers,
-                    timeout=500, max_tokens=3000,
+                    timeout=vl_timeout, max_tokens=vl_max_tokens,
                 )
                 logger.info("VL analysis complete with model %s", _model)
                 return {"text": description, "model": _model}

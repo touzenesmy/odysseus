@@ -654,6 +654,8 @@ async function initVisionSettings() {
   const vlSel = el('set-vlModelSelect');
   const msg = el('set-visionSettingsMsg');
   const enabledToggle = el('set-visionEnabledToggle');
+  const timeoutInput = el('set-visionTimeout');
+  const maxTokensInput = el('set-visionMaxTokens');
   const configWrap = vlSel ? vlSel.closest('div[style*="flex-direction"]') : null;
   var _visionEndpoints = [];
   var visionFallbackWidget = null;
@@ -697,6 +699,8 @@ async function initVisionSettings() {
     if (settings.vision_model) vlSel.value = settings.vision_model;
     _syncModelLogo(vlSel);
     if (enabledToggle) enabledToggle.checked = settings.vision_enabled !== false;
+    if (timeoutInput) timeoutInput.value = settings.vision_timeout || 500;
+    if (maxTokensInput) maxTokensInput.value = settings.vision_max_tokens || 3000;
     visionFallbackWidget = _bindFallbackWidget({
       containerId: 'set-visionFallbacks',
       addBtnId: 'set-visionAddFallback',
@@ -721,12 +725,19 @@ async function initVisionSettings() {
 
   async function saveSettings() {
     try {
-      await _postSettings({ vision_enabled: enabledToggle ? enabledToggle.checked : true, vision_model: vlSel.value });
+      await _postSettings({
+        vision_enabled: enabledToggle ? enabledToggle.checked : true,
+        vision_model: vlSel.value,
+        vision_timeout: timeoutInput ? parseInt(timeoutInput.value, 10) || 500 : 500,
+        vision_max_tokens: maxTokensInput ? parseInt(maxTokensInput.value, 10) || 3000 : 3000,
+      });
       msg.textContent = 'Saved'; msg.style.color = 'var(--fg)'; setTimeout(() => { msg.textContent = ''; }, 2000);
     } catch (e) { msg.textContent = 'Failed to save'; msg.style.color = 'var(--red)'; }
   }
   vlSel.addEventListener('change', saveSettings);
   if (enabledToggle) enabledToggle.addEventListener('change', function() { syncVisionDisabled(); saveSettings(); });
+  if (timeoutInput) timeoutInput.addEventListener('change', saveSettings);
+  if (maxTokensInput) maxTokensInput.addEventListener('change', saveSettings);
 
   _registerAiEndpointRefresh(function(endpoints) {
     _visionEndpoints = endpoints;
