@@ -2601,6 +2601,32 @@ export function addMessage(role, content, modelName, metadata) {
       const toolRounds = Object.keys(toolsByRound).map(Number);
       const maxRound = Math.max(toolRounds.length ? Math.max(...toolRounds) : 0, roundTexts.length);
 
+      // Reasoning models (DeepSeek / Qwen thinking) stream their chain of
+      // thought through reasoning_content, which the server stores in
+      // metadata.thinking rather than in round_texts.  The single-bubble path
+      // below renders that field, but this multi-bubble reconstruction path
+      // never did — so a turn whose visible text lived entirely in the
+      // reasoning channel collapsed to bare tool cards on reload.  Mirror the
+      // single-bubble behavior: when no visible text round exists, emit the
+      // stored thinking as its own bubble so the turn is never blank.
+      const storedThinking = (metadata.thinking || '').trim();
+      const thinkTime = metadata.thinking_time || null;
+      const hasAnyRoundText = roundTexts.some(t => (t || '').trim());
+
+      if (!hasAnyRoundText && storedThinking) {
+        const thinkWrap = document.createElement('div');
+        thinkWrap.className = 'msg msg-ai';
+        const thinkBody = document.createElement('div');
+        thinkBody.className = 'body';
+        thinkBody.innerHTML = markdownModule.processStoredThinking(storedThinking, '', thinkTime);
+        thinkWrap.appendChild(thinkBody);
+        thinkWrap.dataset.raw = '';
+        if (metadata._db_id) thinkWrap.dataset.dbId = metadata._db_id;
+        box.appendChild(thinkWrap);
+        firstMsgAi = thinkWrap;
+        lastMsgAi = thinkWrap;
+      }
+
       const firstRound = (toolsByRound[0] || []).length ? 0 : 1;
       for (let roundNum = firstRound; roundNum <= maxRound; roundNum++) {
         const r = roundNum - 1;
@@ -2664,7 +2690,17 @@ export function addMessage(role, content, modelName, metadata) {
           if (isLastTextRound && metadata?.rag_sources?.length) {
             agentFindingsSuffix += buildRagSourcesBox(metadata.rag_sources);
           }
-          body.innerHTML = agentSourcesPrefix + markdownModule.processWithThinking(markdownModule.squashOutsideCode(txt)) + agentFindingsSuffix;
+          // Attach the stored reasoning to the first visible text bubble so it
+          // isn't dropped on reload (mirrors the single-bubble path).  Guard
+          // against the rare case where the reasoning was already folded into
+          // the round text by the approval gate.
+          const bodyText = markdownModule.squashOutsideCode(txt);
+          const attachStoredThinking = !firstMsgAi && storedThinking && !txt.includes(storedThinking);
+          body.innerHTML = agentSourcesPrefix + (
+            attachStoredThinking
+              ? markdownModule.processStoredThinking(storedThinking, bodyText, thinkTime)
+              : markdownModule.processWithThinking(bodyText)
+          ) + agentFindingsSuffix;
           wrap.appendChild(body);
           wrap.dataset.raw = txt;
           if (metadata?._db_id) wrap.dataset.dbId = metadata._db_id;
@@ -2876,9 +2912,7 @@ export function addMessage(role, content, modelName, metadata) {
     // If thinking is stored in metadata (not in text), reconstruct the full display
     if (role === 'assistant' && metadata?.thinking) {
       const thinkTime = metadata.thinking_time || null;
-      const thinkHtml = markdownModule.processWithThinking(
-        '<think' + (thinkTime ? ` time="${thinkTime}"` : '') + '>' + metadata.thinking + '</think>\n\n' + text
-      );
+      const thinkHtml = markdownModule.processStoredThinking(metadata.thinking, text, thinkTime);
       b.innerHTML = sourcesPrefix + thinkHtml + findingsSuffix;
 	    } else {
 	      b.innerHTML = sourcesPrefix + markdownModule.processWithThinking(text) + findingsSuffix;
