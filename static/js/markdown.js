@@ -604,6 +604,35 @@ export function processWithThinking(text) {
 }
 
 /**
+ * Render an already-separated (thinking, reply) pair without round-tripping the
+ * reasoning through <think> tags. The reload path stores reasoning in
+ * metadata.thinking and the visible reply separately; the stored reasoning may
+ * itself contain literal <think>/</think> text (e.g. when the model is
+ * explaining those tags), which extractThinkingBlocks would mis-parse into a
+ * truncated block + leaked reply. Mirror processWithThinking exactly, but take
+ * the two halves directly instead of extracting them via regex.
+ */
+export function processStoredThinking(thinking, reply, thinkingTime = null) {
+  let html = '';
+  const think = (thinking || '').trim();
+  if (think) html += createThinkingSection(think, 0, thinkingTime);
+
+  let visibleContent = reply || '';
+  const doneOnly = /^\s*\[DONE\]\s*$/i.test(visibleContent);
+  const hadTrailingDone = !doneOnly && /(?:^|\n)\s*\[DONE\]\s*$/i.test(visibleContent);
+
+  if (doneOnly) {
+    html += createTaskCompletedMarker();
+  } else {
+    if (hadTrailingDone) visibleContent = visibleContent.replace(/\n?\s*\[DONE\]\s*$/i, '').trimEnd();
+    if (visibleContent) html += mdToHtml(visibleContent);
+    if (hadTrailingDone) html += createTaskCompletedMarker();
+  }
+
+  return _useSvgEmoji() ? svgifyEmoji(html) : html;
+}
+
+/**
  * Convert markdown to HTML
  */
 export function mdToHtml(src, opts) {
@@ -993,6 +1022,7 @@ const markdownModule = {
   squashOutsideCode,
   renderContent,
   processWithThinking,
+  processStoredThinking,
   createCollapsible,
   hasUnclosedThinkTag,
   extractThinkingBlocks,
