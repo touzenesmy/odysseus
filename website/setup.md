@@ -752,6 +752,15 @@ Key settings:
 
 All upload-limit vars are validated (must be a positive integer) and optional; an invalid value fails fast at startup.
 
+### Agent stream timeout (`agent_stream_timeout_seconds`)
+
+A `data/settings.json` setting (default `300`; not in the web Settings UI — edit the file directly, or ask the assistant's admin tools to change "agent timeout"). It drives two caps in the agent loop:
+
+- **Per-read inactivity timeout** — the HTTP read timeout on the model stream. If the endpoint sends no bytes for this many seconds, the round is aborted and reported as a 502. A healthy stream (even a slow local model) resets the timer on every chunk, so this only fires when an endpoint is genuinely wedged.
+- **Per-round wall-clock cap** — a complementary hard deadline of `max(value × 4, 1200)` seconds per agent round, which catches streams that trickle bytes forever without ever finishing.
+
+Slow local models (partial CPU offload) or models with long thinking passes can legitimately exceed the default 20-minute wall-clock cap and get cancelled mid-round (visible in logs as a round ending with `text_chars=0`). Raise the value to give long rounds more headroom (e.g. `600` → 10-minute inactivity timeout and a 40-minute per-round cap). The settings cache refreshes within seconds, so the change applies to the next agent round without a restart.
+
 ### Built-in MCP servers (optional setup)
 
 Odysseus auto-registers a few built-in MCP servers at startup. The npx-based ones (currently the browser server, `@playwright/mcp`) only start when their npm package is already in the local npx cache. If a package isn't cached, that server is skipped with a startup log message explaining what to do, so a fresh install does not block on a multi-minute npm download or hang if Playwright system deps are missing.
