@@ -123,3 +123,6 @@ _scratch/
 
 # Personal baremetal compose files — never push
 docker-compose-baremetal.*
+
+# Personal instance map — machine-specific paths, kept in ~/localmodel
+docs/instance-map.md
