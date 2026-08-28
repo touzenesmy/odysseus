@@ -132,9 +132,22 @@ _NEWS_HINTS = ("news", "nyheter", "headlines", "breaking", "latest", "today", "i
 _GENERAL_ENGINES = os.environ.get("SEARXNG_GENERAL_ENGINES", "bing,mojeek,presearch")
 
 
-def searxng_search_api(query: str, count: Optional[int] = None, categories: str = "general",
-                       time_filter: Optional[str] = None) -> List[dict]:
-    """Search using SearXNG JSON API. Returns list of {title, url, snippet}."""
+def _searxng_response_meta(data) -> dict:
+    """Summarize a SearXNG JSON response: contributing engines, unresponsive
+    engines, and whether the result set is degraded (a single engine — i.e. no
+    cross-engine ranking to dilute low-quality hits)."""
+    if not isinstance(data, dict):
+        return {"engines": [], "unresponsive": [], "degraded": False}
+    raw_results = data.get("results") or []
+    engines = sorted({r.get("engine") for r in raw_results if isinstance(r, dict) and r.get("engine")})
+    unresponsive = data.get("unresponsive_engines") or []
+    return {"engines": engines, "unresponsive": unresponsive, "degraded": len(engines) <= 1}
+
+
+def searxng_search_api_meta(query: str, count: Optional[int] = None, categories: str = "general",
+                            time_filter: Optional[str] = None) -> tuple:
+    """Search using SearXNG JSON API. Returns (results, meta); meta carries
+    engine-health info so callers can detect single-engine degradation."""
     count = count if count is not None else _get_result_count()
     instance = _get_search_instance()
     api_key = ""
@@ -232,18 +245,26 @@ def searxng_search_api(query: str, count: Optional[int] = None, categories: str 
                 query,
             )
             parsed, data = _run(fallback)
-        logger.info(f"SearXNG JSON API returned {len(parsed)} results for: {query}")
-        if not parsed:
-            unresponsive = data.get("unresponsive_engines") if isinstance(data, dict) else None
-            if unresponsive:
-                logger.info(f"SearXNG unresponsive engines for {query!r}: {unresponsive}")
-        return parsed
+        meta = _searxng_response_meta(data)
+        logger.info(
+            f"SearXNG JSON API returned {len(parsed)} results for: {query} "
+            f"(engines={meta['engines']}, degraded={meta['degraded']})"
+        )
+        if not parsed and meta["unresponsive"]:
+            logger.info(f"SearXNG unresponsive engines for {query!r}: {meta['unresponsive']}")
+        return parsed, meta
     except Exception as e:
         logger.warning(f"SearXNG JSON API search failed: {e}")
         html_results = searxng_search(query, max_results=count)
         if html_results:
             logger.info(f"SearXNG HTML fallback returned {len(html_results)} results for: {query}")
-        return html_results
+        return html_results, {"engines": [], "unresponsive": [], "degraded": False}
+
+
+def searxng_search_api(query: str, count: Optional[int] = None, categories: str = "general",
+                       time_filter: Optional[str] = None) -> List[dict]:
+    """Search using SearXNG JSON API. Returns list of {title, url, snippet}."""
+    return searxng_search_api_meta(query, count, categories, time_filter)[0]
 
 
 def searxng_search(query, max_results=10):
