@@ -24,6 +24,7 @@ from .query import _cache_duration_for_query
 from .ranking import rank_search_results
 from .providers import (
     searxng_search_api,
+    searxng_search_api_meta,
     brave_search,
     duckduckgo_search,
     google_pse_search,
@@ -110,6 +111,32 @@ def _call_provider(provider_name: str, query: str, count: int, time_filter: str 
     return []
 
 
+def _call_provider_with_meta(provider_name: str, query: str, count: int, time_filter: str = None):
+    """Call a provider, returning (results, degraded).
+
+    Only SearXNG can report degradation (a single-engine result set has no
+    cross-engine ranking to dilute low-quality hits); all other providers are
+    single-source and report degraded=False.
+    """
+    if provider_name == "searxng":
+        results, meta = searxng_search_api_meta(query, count, time_filter=time_filter)
+        return results, bool(meta.get("degraded"))
+    return _call_provider(provider_name, query, count, time_filter), False
+
+
+def _merge_results(primary: List[dict], fallback: List[dict]) -> List[dict]:
+    """Merge two provider result sets, de-duplicating by URL and keeping the
+    primary provider's ordering first."""
+    merged = list(primary)
+    seen = {r.get("url") for r in merged if r.get("url")}
+    for r in fallback:
+        url = r.get("url")
+        if url and url not in seen:
+            seen.add(url)
+            merged.append(r)
+    return merged
+
+
 # If the self-hosted SearXNG instance is up but all enabled engines return
 # empty, fall back to the no-key provider so "search X" still works on fresh
 # installs. Users can override/disable with `search_fallback_chain`.
@@ -175,19 +202,34 @@ def searxng_search_results(query: str, count: int = 10, time_filter: str = None)
 
     results: List[dict] = []
     for provider_name in provider_chain:
+        got: List[dict] = []
+        degraded = False
         for attempt in range(2):
             try:
                 logger.info(f"Attempting {provider_name} search (attempt {attempt + 1})")
-                results = _call_provider(provider_name, query, count, time_filter)
-                if results:
-                    logger.info(f"{provider_name} search succeeded with {len(results)} results")
+                got, degraded = _call_provider_with_meta(provider_name, query, count, time_filter)
+                if got:
+                    logger.info(
+                        f"{provider_name} search succeeded with {len(got)} results"
+                        + (" (degraded)" if degraded else "")
+                    )
                     break
             except (NetworkError, ParseError, RateLimitError) as e:
                 error_logger.error(f"{provider_name} search error (attempt {attempt + 1}): {e}")
             except Exception as e:
                 error_logger.error(f"Unexpected error during {provider_name} search (attempt {attempt + 1}): {e}")
-        if results:
+        if not got:
+            continue
+        if not results:
+            results = got
+            if degraded:
+                # Single-engine result set has no cross-engine ranking to dilute
+                # low-quality hits; fall through and merge the next provider.
+                logger.info(f"{provider_name} degraded (single engine); merging fallback provider rankings")
+                continue
             break
+        results = _merge_results(results, got)
+        break
 
     success = bool(results)
     _record_query(query, success, cache_hit=False)
@@ -283,18 +325,33 @@ def comprehensive_web_search(
     for provider_name in provider_chain:
         last_err = None
         empty = False
+        got: List[dict] = []
+        degraded = False
         for attempt in range(2):
             try:
-                search_results = _call_provider(provider_name, query, fetch_count, time_filter)
-                if search_results:
-                    provider_attempts[provider_name] = f"ok ({len(search_results)})"
-                    logger.info(f"Comprehensive search: {provider_name} returned {len(search_results)} results")
+                got, degraded = _call_provider_with_meta(provider_name, query, fetch_count, time_filter)
+                if got:
+                    provider_attempts[provider_name] = f"ok ({len(got)})"
+                    logger.info(
+                        f"Comprehensive search: {provider_name} returned {len(got)} results"
+                        + (" (degraded)" if degraded else "")
+                    )
                     break
                 empty = True
             except Exception as e:
                 last_err = e
                 logger.warning(f"Comprehensive search: {provider_name} attempt {attempt + 1} failed: {e}")
-        if search_results:
+        if got:
+            if not search_results:
+                search_results = got
+                if degraded:
+                    # Single-engine result set has no cross-engine ranking to
+                    # dilute low-quality hits; fall through and merge the next
+                    # provider's independent ranking.
+                    logger.info("Comprehensive search: primary degraded (single engine); merging fallback provider rankings")
+                    continue
+                break
+            search_results = _merge_results(search_results, got)
             break
         if last_err is not None:
             provider_attempts[provider_name] = f"error: {last_err}"
