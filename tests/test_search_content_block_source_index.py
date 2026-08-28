@@ -23,6 +23,11 @@ def core(monkeypatch):
     monkeypatch.setattr(mod, "_get_result_count", lambda: 2)
     monkeypatch.setattr(mod, "_call_provider", lambda *a, **k: [dict(r) for r in results])
     monkeypatch.setattr(mod, "_filter_low_relevance_results", lambda q, r: r)
+    monkeypatch.setattr(
+        mod,
+        "_call_provider_with_meta",
+        lambda *a, **k: ([dict(r) for r in results], False),
+    )
     monkeypatch.setattr(mod, "rank_search_results", lambda q, r: r)
     return mod
 
