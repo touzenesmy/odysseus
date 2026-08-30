@@ -130,6 +130,7 @@ def test_detached_resume_surfaces_fallback_then_provider_alias_before_reload():
         "  querySelector(selector) { if (selector === '.role') return this._role || null; if (selector === '.body') return this._body || null; if (selector === '.stream-content') return this._content || null; return null; }",
         "}",
         "const box = new Element('main');",
+        "Object.defineProperty(Element.prototype, 'isConnected', { get() { return !!this.parentNode; } });",
         "const document = { getElementById(id) { return id === 'chat-history' ? box : null; }, createElement(tag) { return new Element(tag); } };",
         "const window = {};",
         "let selectCalls = 0; const labels = []; const toasts = [];",
@@ -140,6 +141,7 @@ def test_detached_resume_surfaces_fallback_then_provider_alias_before_reload():
         "const documentModule = null; const chatRenderer = { recordSessionMetricsCost() {}, addMessage() {} };",
         "const _resumingStreams = new Set(); const _streamRunIds = new Map(); const API_BASE = '';",
         "function hasActiveStream() { return false; } function _shortModel(v) { return v; } function _applyModelColor() {}",
+        "let rafQueued = 0; function requestAnimationFrame(cb) { rafQueued += 1; cb(); }",
         "function _setRoleModelLabel(role, requested, actual) { labels.push({requested, actual}); role.textContent = requested + ' -> ' + actual; }",
         "function _streamDisplayText(v) { return v; } function _showDocumentWritingStatus() {} function _finishDocumentWritingStatus() {} function _metricsCostRecordId() { return 'run'; }",
         "const events = [",
@@ -187,6 +189,7 @@ def test_detached_resume_renders_preoutput_error_without_empty_reload():
         "  querySelector(selector) { if (selector === '.role') return this._role || null; if (selector === '.body') return this._body || null; if (selector === '.stream-content') return this._content || null; return null; }",
         "}",
         "const box = new Element('main');",
+        "Object.defineProperty(Element.prototype, 'isConnected', { get() { return !!this.parentNode; } });",
         "const document = { getElementById(id) { return id === 'chat-history' ? box : null; }, createElement(tag) { return new Element(tag); } };",
         "const window = {};",
         "let selectCalls = 0;",
@@ -213,6 +216,70 @@ def test_detached_resume_renders_preoutput_error_without_empty_reload():
         "selectCalls": 0,
         "holderCount": 1,
         "errorText": "[Error: invalid key <img src=x>]",
+    }
+
+
+@pytest.mark.skipif(not _HAS_NODE, reason="node binary not on PATH")
+def test_detached_resume_scopes_replay_text_to_current_round():
+    """A /resume replay of a multi-round (agent) run must keep each round's
+    rendered text scoped to that round — with a fresh holder per agent_step —
+    instead of accumulating the whole replayed run into one bubble and
+    re-rendering the full transcript on every delta (O(n^2), locked tab)."""
+    source = "\n".join([
+        "class Element {",
+        "  constructor(tag = 'div') { this.tag = tag; this.children = []; this.parentNode = null; this.style = {}; this.textContent = ''; this._html = ''; }",
+        "  appendChild(child) { child.parentNode = this; this.children.push(child); return child; }",
+        "  remove() { if (!this.parentNode) return; this.parentNode.children = this.parentNode.children.filter(c => c !== this); this.parentNode = null; }",
+        "  set innerHTML(value) {",
+        "    this._html = value;",
+        "    if (value.includes('stream-content')) {",
+        "      this._role = new Element('div'); this._role.parentNode = this;",
+        "      this._body = new Element('div'); this._body.parentNode = this;",
+        "      this._content = new Element('div'); this._body.appendChild(this._content);",
+        "    }",
+        "  }",
+        "  get innerHTML() { return this._html; }",
+        "  querySelector(selector) { if (selector === '.role') return this._role || null; if (selector === '.body') return this._body || null; if (selector === '.stream-content') return this._content || null; return null; }",
+        "}",
+        "const box = new Element('main');",
+        "Object.defineProperty(Element.prototype, 'isConnected', { get() { return !!this.parentNode; } });",
+        "const document = { getElementById(id) { return id === 'chat-history' ? box : null; }, createElement(tag) { return new Element(tag); } };",
+        "const window = {};",
+        "const renders = [];",
+        "const sessionModule = { getSessions() { return [{id: 's1', model: 'm'}]; }, getCurrentSessionId() { return 's1'; }, selectSession() {}, loadSessions() {} };",
+        "const uiModule = { esc(v) { return v; }, scrollHistory() {} };",
+        "const spinnerModule = { create() { return { element: null, createElement() { this.element = new Element('spinner'); return this.element; }, start() {}, destroy() { if (this.element) this.element.remove(); } }; } };",
+        "const markdownModule = { normalizeThinkingMarkup(v) { return v; }, mdToHtml(v) { renders.push(v); return v; }, squashOutsideCode(v) { return v; } };",
+        "const documentModule = null;",
+        "const chatRenderer = { recordSessionMetricsCost() {}, addMessage() {} };",
+        "const _resumingStreams = new Set(); const _streamRunIds = new Map(); const API_BASE = '';",
+        "function hasActiveStream() { return false; } function _shortModel(v) { return v || ''; } function _applyModelColor() {}",
+        "function _setRoleModelLabel(role) { role.textContent = 'm'; }",
+        "function _streamDisplayText(v) { return v; } function _showDocumentWritingStatus() {} function _finishDocumentWritingStatus() {} function _metricsCostRecordId() { return 'run'; }",
+        "let rafQueued = 0; function requestAnimationFrame(cb) { rafQueued += 1; cb(); }",
+        "const events = [",
+        "  'data: {\"delta\":\"round-one text\"}\\n\\n',",
+        "  'data: {\"type\":\"agent_step\"}\\n\\n',",
+        "  'data: {\"delta\":\"round-two text\"}\\n\\n',",
+        "  'data: [DONE]\\n\\n',",
+        "].join('');",
+        "const encoded = new TextEncoder().encode(events); let reads = 0;",
+        "const reader = { async read() { return reads++ === 0 ? {done:false, value:encoded} : {done:true}; }, async cancel() {} };",
+        "async function fetch() { return { ok:true, body:{getReader(){return reader;}}, headers:{get(){return 'run-1';}} }; }",
+        _resume_function_source(),
+        "await resumeStream('s1');",
+        "console.log(JSON.stringify({renders, rafQueued, remaining: box.children.length}));",
+    ])
+
+    result = _run_node(source)
+    # renders is the discriminator: the pre-fix single-holder path rendered
+    # the ACCUMULATED transcript on every delta, so round 2's render would be
+    # "round-one textround-two text". Per-round scoping yields exactly the
+    # two round texts, in order.
+    assert result == {
+        "renders": ["round-one text", "round-two text"],
+        "rafQueued": 2,
+        "remaining": 0,
     }
 
 

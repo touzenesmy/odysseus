@@ -4992,27 +4992,37 @@ import { loadPanel } from './panels.js';
     const box = document.getElementById('chat-history');
     if (!box) return false;
     if (replaceHolder && replaceHolder.parentNode) replaceHolder.remove();
-
     // Block duplicate re-attach attempts while this reader is live. A dedicated
     // set (not _backgroundStreams) so checkBackgroundStream doesn't mistake this
     // for a same-tab POST stream and spawn its own spinner+poll on re-entry.
     _resumingStreams.add(sessionId);
 
-    const holder = document.createElement('div');
-    holder.className = 'msg msg-ai';
+    // One bubble per agent round (agent_step), like the live path. Keeping
+    // roundText scoped to the current round also keeps each renderDelta
+    // re-render bounded to that round — re-rendering the whole replayed run
+    // on every delta would grow O(n^2) and lock the tab. The canonical DB
+    // reload on completion restores the full transcript either way.
     const meta = sessionModule.getSessions().find(s => s.id === sessionId);
-    const roleLabel = _shortModel(meta && meta.model);
-    const roleTs = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    holder.innerHTML = '<div class="role">' + uiModule.esc(roleLabel) +
-      ' <span class="role-timestamp">' + roleTs + '</span></div>' +
-      '<div class="body"><div class="stream-content"></div></div>';
-    holder._requestedModel = meta && meta.model;
-    holder._actualModel = holder._requestedModel;
-    _applyModelColor(holder.querySelector('.role'), meta && meta.model);
-    const contentDiv = holder.querySelector('.stream-content');
-    box.appendChild(holder);
-
-    const spinner = spinnerModule.create('Generating response...', 'right');
+    const holders = [];
+    let holder, contentDiv, spinner;
+    const makeRoundHolder = () => {
+      const h = document.createElement('div');
+      h.className = 'msg msg-ai';
+      const roleLabel = _shortModel(meta && meta.model);
+      const roleTs = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      h.innerHTML = '<div class="role">' + uiModule.esc(roleLabel) +
+        ' <span class="role-timestamp">' + roleTs + '</span></div>' +
+        '<div class="body"><div class="stream-content"></div></div>';
+      h._requestedModel = meta && meta.model;
+      h._actualModel = h._requestedModel;
+      _applyModelColor(h.querySelector('.role'), meta && meta.model);
+      box.appendChild(h);
+      holders.push(h);
+      return h;
+    };
+    holder = makeRoundHolder();
+    contentDiv = holder.querySelector('.stream-content');
+    spinner = spinnerModule.create('Generating response...', 'right');
     holder.querySelector('.body').appendChild(spinner.createElement());
     spinner.start();
     uiModule.scrollHistory();
@@ -5036,15 +5046,38 @@ import { loadPanel } from './panels.js';
       try { spinner.destroy(); } catch (_) {}
       _resumingStreams.delete(sessionId);
     };
-
-    const renderDelta = () => {
-      const dt = markdownModule.normalizeThinkingMarkup(_streamDisplayText(roundText, { final: docFenceOpened }));
-      if (docFenceOpened && !dt.trim()) {
-        _showDocumentWritingStatus(contentDiv);
-      } else {
-        contentDiv.innerHTML = markdownModule.mdToHtml(markdownModule.squashOutsideCode(dt));
+    const removeRoundHolders = () => {
+      for (const h of holders) {
+        if (h._docWritingThread && h._docWritingThread.parentNode) h._docWritingThread.remove();
+        if (h.parentNode) h.remove();
       }
-      uiModule.scrollHistory();
+      holders.length = 0;
+    };
+
+    // Render at most once per animation frame. A /resume replay can deliver
+    // thousands of buffered deltas in a tight burst (long detached runs), and
+    // re-rendering the full transcript on every event was O(n^2) and locked
+    // the tab on every open attempt. Coalescing to one render per frame
+    // bounds the cost; rich responses get a canonical DB reload on completion
+    // anyway, so display fidelity is unchanged.
+    let renderScheduled = false;
+    const renderDelta = () => {
+      if (renderScheduled) return;
+      renderScheduled = true;
+      requestAnimationFrame(() => {
+        renderScheduled = false;
+        // Finalization may have removed the holder (plain-text finalize or
+        // canonical reload) before this frame ran — don't render into a
+        // detached node.
+        if (!contentDiv.isConnected) return;
+        const dt = markdownModule.normalizeThinkingMarkup(_streamDisplayText(roundText, { final: docFenceOpened }));
+        if (docFenceOpened && !dt.trim()) {
+          _showDocumentWritingStatus(contentDiv);
+        } else {
+          contentDiv.innerHTML = markdownModule.mdToHtml(markdownModule.squashOutsideCode(dt));
+        }
+        uiModule.scrollHistory();
+      });
     };
 
     try {
@@ -5150,8 +5183,23 @@ import { loadPanel } from './panels.js';
               metricsData._costRecordId = _metricsCostRecordId(resumeRunId, json);
             }
             if (metricsData) displayMetrics(holder, metricsData);
+          } else if (json.type === 'agent_step') {
+            rich = true;
+            // New round (mirrors the live path): fresh bubble, scoped text,
+            // fresh spinner. Bounds roundText/renderDelta to one round and
+            // matches what the canonical reload will show.
+            try { if (spinner) spinner.destroy(); } catch (_) {}
+            roundText = '';
+            docFenceOpened = false;
+            gotDelta = false;
+            holder = makeRoundHolder();
+            contentDiv = holder.querySelector('.stream-content');
+            spinner = spinnerModule.create('Generating response...', 'right');
+            holder.querySelector('.body').appendChild(spinner.createElement());
+            spinner.start();
+            uiModule.scrollHistory();
           } else if (json.type === 'tool_start' || json.type === 'tool_output' ||
-                     json.type === 'tool_progress' || json.type === 'agent_step' ||
+                     json.type === 'tool_progress' ||
                      json.type === 'web_sources' || json.type === 'rag_sources' ||
                      json.type === 'research_progress' || json.type === 'research_sources' ||
                      json.type === 'research_findings' || json.type === 'research_done') {
@@ -5166,7 +5214,7 @@ import { loadPanel } from './panels.js';
 
     cleanup();
     if (docFenceOpened) _finishDocumentWritingStatus(holder, true);
-    if (leftSession) { if (holder.parentNode) holder.remove(); return true; }
+    if (leftSession) { removeRoundHolders(); return true; }
 
     const onThisSession = sessionModule.getCurrentSessionId &&
                           sessionModule.getCurrentSessionId() === sessionId;
@@ -5187,7 +5235,7 @@ import { loadPanel } from './panels.js';
     // canonical single message (markdown + footer actions + metrics) using the
     // same renderer history does. No history refetch, no end-of-stream flicker.
     if (onThisSession && !rich && roundText.trim()) {
-      if (holder.parentNode) holder.remove();
+      removeRoundHolders();
       const model = meta && meta.model;
       const meta_ = metricsData ? Object.assign({ model }, metricsData) : { model };
       chatRenderer.addMessage('assistant', roundText, model, meta_);
@@ -5197,8 +5245,7 @@ import { loadPanel } from './panels.js';
 
     // Rich response (tools, sources, docs, multi-round) or user moved on:
     // reload from the DB for the full canonical render.
-    if (holder._docWritingThread && holder._docWritingThread.parentNode) holder._docWritingThread.remove();
-    if (holder.parentNode) holder.remove();
+    removeRoundHolders();
     if (metricsData) {
       chatRenderer.recordSessionMetricsCost(metricsData, sessionId);
     }
