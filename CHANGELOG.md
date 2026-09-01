@@ -4,6 +4,38 @@ Human-readable summary of notable changes to this fork. The git commit history r
 the authoritative record; this file exists so "what changed and when" is readable
 without `git log`.
 
+## 2026-09-01 — Ticked bash now also survives the explicit-web-intent strip
+
+**Problem.** The ticked bash toggle was *still* flaky, for a second reason.
+Session `98d4cd8f` ("…update the skill with what we've learned **today**…")
+lost `bash`/`python`/`read_file`/`write_file` for the whole turn despite the
+bash toggle being ticked. The word "today" tripped the route's web-intent
+regex (`…|today|…`), and the explicit-web-intent strip in
+`routes/chat_routes.py` removed the four shell/file tools unconditionally —
+again ignoring the ticked toggle. The light auto-escalation strip was fixed
+yesterday, but this is a separate strip that ran first.
+
+**Changes.**
+
+- **Bash fix** (`routes/chat_routes.py`): hoisted a single `_bash_explicitly_on`
+  flag (ticked `allow_bash=true`) above both intent strips. The web-intent
+  strip now only removes `bash`/`python`/`read_file`/`write_file` when the
+  toggle is *not* ticked; every other tool in that strip (`edit_file`,
+  memory/skills/chats/email/notes/calendar/tasks/doc tools, `api_call`) still
+  applies regardless. Explicit off, privilege denials, and compare mode keep
+  stripping bash. The light auto-escalation strip reuses the same flag.
+- **Tests** (`tests/test_chat_route_tool_policy.py`): 4 new regression tests —
+  ticked bash survives the web-intent strip, unticked and explicit-off are
+  still stripped, plus a source guard that the flag is defined before the
+  strip consumes it.
+- **Docs** (`specs/chat.md`): documented the explicit-web-intent strip and the
+  ticked-bash exemption, with the `98d4cd8f` "today" incident as the worked
+  example.
+
+**Note.** The 2026-08-31 entry below said "the explicit-web-intent strip
+still remove[s] bash as before"; that no longer holds — a ticked bash toggle
+now exempts the web-intent strip too.
+
 ## 2026-08-31 — Documents toolbar toggle + ticked-bash fix on light auto-escalation
 
 **Problem.** The bash toolbar toggle ("always available") was flaky: `bash`
@@ -19,8 +51,9 @@ missed them, even though `ALWAYS_AVAILABLE` membership should protect them.
 
 - **Bash fix** (`routes/chat_routes.py`): the light auto-escalation strip now
   checks `allow_bash` first — a ticked toggle (`true`) exempts the strip so
-  bash + file companions survive; explicit off, privilege denials, compare
-  mode, and the explicit-web-intent strip still remove bash as before.
+  bash + file companions survive; explicit off, privilege denials, and compare
+  mode still remove bash. (The explicit-web-intent strip gained the same
+  exemption on 2026-09-01 — see that entry.)
 - **New Documents toggle** (`static/index.html`, `static/app.js`,
   `static/js/chat.js`): icon button after the bash button and before the
   workspace name, same `input-icon-btn` style, agent-mode-only, mobile

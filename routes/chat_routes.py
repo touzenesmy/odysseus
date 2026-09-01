@@ -1472,16 +1472,28 @@ def setup_chat_routes(
         if allow_documents is not None and str(allow_documents).lower() != "true":
             disabled_tools.update(DOCUMENT_TOOL_NAMES)
         _explicit_web_intent = _explicit_web_intent or bool(_tool_intent and _tool_intent.category == "web")
+        # A ticked bash toggle (allow_bash="true") means the user explicitly
+        # asked for the shell this turn. It survives the intent-based strips
+        # below (web intent, light auto-escalation). An explicit OFF
+        # (allow_bash="false") keeps being stripped by the toggle check above.
+        _bash_explicitly_on = allow_bash is not None and str(allow_bash).lower() == "true"
         if is_web_search_explicitly_denied(allow_web_search) or not _search_enabled:
             disabled_tools.update(WEB_TOOL_NAMES)
         if _explicit_web_intent:
             # A direct lookup/search request should not drift into personal
             # tools or shell fallbacks. It can only use web_search/web_fetch
             # when the request's explicit web setting enabled them.
+            # Exception: a ticked bash toggle still means the user asked for
+            # the shell, so bash + its file companions must survive — same
+            # rule as the light auto-escalation case below.
+            if not _bash_explicitly_on:
+                disabled_tools.update({
+                    "bash", "python",
+                    "read_file", "write_file",
+                })
             disabled_tools.update({
-                "bash", "python",
                 "search_chats", "manage_skills", "manage_memory",
-                "read_file", "write_file", "edit_file",
+                "edit_file",
                 "create_document", "edit_document", "update_document",
                 "send_email", "reply_to_email",
                 "manage_notes", "manage_calendar", "manage_tasks",
@@ -1555,11 +1567,7 @@ def setup_chat_routes(
         # the heavy "do things on the computer" tools — otherwise the model
         # tries to shell out for a request that never needed it, then fails
         # (and looks broken when the shell is disabled).
-        # Exception: a ticked bash toggle (allow_bash="true") means the user
-        # asked for the shell, so bash + its file companions must survive the
-        # strip — ALWAYS_AVAILABLE is meant to be honored. An explicit OFF
-        # (allow_bash="false") still strips bash via the toggle check above.
-        _bash_explicitly_on = allow_bash is not None and str(allow_bash).lower() == "true"
+        # (See _bash_explicitly_on defined above the web-intent block.)
         if auto_escalated and not _workspace_agent_intent:
             if not _bash_explicitly_on:
                 disabled_tools.update({
