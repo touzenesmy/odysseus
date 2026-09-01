@@ -183,13 +183,17 @@ def _build_disabled_tools(
     if allow_documents is not None and str(allow_documents).lower() != "true":
         disabled_tools.update(_DOC_TOOL_NAMES)
     search_enabled = web_search_enabled_for_turn(allow_web_search, use_web)
+    _bash_explicitly_on = allow_bash is not None and str(allow_bash).lower() == "true"
     if is_web_search_explicitly_denied(allow_web_search) or not search_enabled:
         disabled_tools.update(WEB_TOOL_NAMES)
     if explicit_web_intent:
+        # Ticked bash toggle survives the web-intent strip (mirrors
+        # _bash_explicitly_on in chat_routes.chat_stream).
+        if not _bash_explicitly_on:
+            disabled_tools.update({"bash", "python", "read_file", "write_file"})
         disabled_tools.update({
-            "bash", "python",
             "search_chats", "manage_skills", "manage_memory",
-            "read_file", "write_file", "edit_file",
+            "edit_file",
             "create_document", "edit_document", "update_document",
             "send_email", "reply_to_email",
             "manage_notes", "manage_calendar", "manage_tasks",
@@ -313,6 +317,66 @@ def test_prompt_web_intent_does_not_enable_web_without_setting():
     )
     assert "web_search" in disabled
     assert "web_fetch" in disabled
+
+
+def test_ticked_bash_survives_web_intent_strip():
+    """Regression: a message containing 'today' (route web-intent regex)
+    must not strip bash when the bash toggle is ticked (allow_bash='true').
+    Session #98d4cd8f — 'update the odysseus fork skill with what we've
+    learned today...' lost bash/python/read_file/write_file to the
+    web-intent strip despite allow_bash='true'."""
+    disabled = _build_disabled_tools(
+        allow_bash="true",
+        explicit_web_intent=True,
+        allow_web_search=None,
+    )
+    assert "bash" not in disabled
+    assert "python" not in disabled
+    assert "read_file" not in disabled
+    assert "write_file" not in disabled
+    # The rest of the web-intent strip still applies.
+    assert "edit_file" in disabled
+    assert "manage_skills" in disabled
+    assert "search_chats" in disabled
+
+
+def test_unticked_bash_still_stripped_on_web_intent():
+    """Without an explicit allow_bash, the web-intent strip keeps bash
+    and its file companions away (original behavior)."""
+    disabled = _build_disabled_tools(
+        allow_bash=None,
+        explicit_web_intent=True,
+        allow_web_search=None,
+    )
+    assert "bash" in disabled
+    assert "python" in disabled
+    assert "read_file" in disabled
+    assert "write_file" in disabled
+
+
+def test_explicit_off_bash_stripped_on_web_intent():
+    """allow_bash='false' + web intent: bash stripped (toggle rule)."""
+    disabled = _build_disabled_tools(
+        allow_bash="false",
+        explicit_web_intent=True,
+        allow_web_search=None,
+    )
+    assert "bash" in disabled
+
+
+def test_web_intent_bash_guard_in_route_source():
+    """chat_routes must gate the web-intent bash strip on _bash_explicitly_on
+    so a ticked toggle can never be overridden by an accidental web-intent
+    match (e.g. the word 'today' in a coding message)."""
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert "_bash_explicitly_on = allow_bash is not None" in source
+    # The guard must appear BEFORE the web-intent block consumes it.
+    guard = source.index("_bash_explicitly_on = allow_bash is not None")
+    web_block = source.index("if _explicit_web_intent:")
+    assert guard < web_block, (
+        "_bash_explicitly_on must be defined before the web-intent strip"
+    )
+    assert "if not _bash_explicitly_on:" in source
 
 
 def test_admin_user_gets_bash_enabled_by_default():
