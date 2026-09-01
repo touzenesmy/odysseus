@@ -64,7 +64,7 @@ Tool registration is split:
 
 When adding, removing, or renaming a tool, update the registry chain, execution dispatch, retrieval text, prompt wording, disabled-tool UI, and tests together.
 
-`src.tool_index.ALWAYS_AVAILABLE` is the retrieval catalog for high-frequency tools such as shell/python, web search/fetch, read/write/edit-file, code-nav, `manage_memory`, `ask_user`, `update_plan`, selected Cookbook serve controls, and `app_api`. Current prompt/schema assembly preserves only selected base tools unconditionally, then adds intent-, skill-, and retrieval-relevant tools so unrelated schemas do not flood small contexts.
+`src.tool_index.ALWAYS_AVAILABLE` is the retrieval catalog for high-frequency tools such as shell/python, web search/fetch, read/write/edit-file, code-nav, `manage_memory`, `ask_user`, `update_plan`, selected Cookbook serve controls, and `app_api`. Current prompt/schema assembly preserves only selected base tools unconditionally, then adds intent-, skill-, and retrieval-relevant tools so unrelated schemas do not flood small contexts. Membership in `ALWAYS_AVAILABLE` is a retrieval guarantee only — it does not protect a tool from the route-level disabled-tool strips. Two toolbar toggles bypass even that: a ticked bash toggle (`allow_bash=true`) force-includes `bash` into the turn's forced-tool set, and a ticked Documents toggle (`allow_documents=true`) force-includes the `DOCUMENT_TOOL_NAMES` editor-panel set (`create_document`, `edit_document`, `update_document`, `suggest_document`, `manage_documents`) defined in `routes/chat_routes.py`. Both force-includes are filtered against `disabled_tools` in `src/agent_loop.py`, so an explicit toggle-off or a privilege denial still strips them.
 
 ## Tool Retrieval And Execution
 

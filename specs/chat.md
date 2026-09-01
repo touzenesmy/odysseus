@@ -88,7 +88,24 @@ conservative regex auto-escalation hints; `src.agent_loop`,
 `src.tool_security`, `src.tool_execution`, and internal loopback validation
 remain server-side enforcement owners.
 
-`allow_bash` and `allow_web_search` can be read from the JSON request body for browser chat posts that do not submit traditional form fields.
+`allow_bash`, `allow_documents`, and `allow_web_search` can be read from the JSON request body for browser chat posts that do not submit traditional form fields. All three are tri-state:
+
+- **`allow_bash`** (toolbar "Bash" toggle, sent from the agent-mode composer):
+  - `true` — bash is force-included into the turn's forced-tool set so it never silently drops on RAG retrieval misses, and the light auto-escalation strip (see below) no longer removes `bash`/`python`/`read_file`/`write_file` — a ticked toggle means "always available" is honored.
+  - `false` — `bash` is added to `disabled_tools` and stays stripped everywhere, including force-includes (the agent loop filters forced tools against `disabled_tools`).
+  - unset (`None`) — defer to per-user privilege checks; nothing force-included.
+- **`allow_documents`** (toolbar "Documents" toggle, sits after the bash button, before the workspace name): same tri-state over the editor-panel document tool set `DOCUMENT_TOOL_NAMES` (`create_document`, `edit_document`, `update_document`, `suggest_document`, `manage_documents`). `true` force-includes the whole set so e.g. `edit_document` (patch the open document) survives retrieval variance; `false` strips the set; unset lets RAG decide as before. Compare sessions always strip the create/edit/update trio regardless. The active-document prune in `src/agent_loop.py` only touches disk file tools (`read_file`, `bash`, …) and never the editor-panel doc tools, so a ticked Documents toggle holds even on "edit this document" turns.
+
+Light auto-escalation strip: when a chat-mode message is escalated to agent by
+the conservative regexes (web/notes/email/etc. intent) but not by a
+workspace/shell intent, the route removes `bash`, `python`, `read_file`,
+`write_file` (and browser MCP tools) from the turn so the model cannot shell
+out for a request that never needed it. A ticked bash toggle
+(`allow_bash=true`) exempts that strip — the user explicitly asked for the
+shell — while explicit off, privilege denials, compare mode, and the
+explicit-web-intent strip keep removing bash. This is why a ticked bash toggle
+was previously still flaky: the strip ran after RAG selection and ignored the
+toggle.
 
 Web search tools are per-turn explicit opt-in. Either `allow_web_search=true`
 or `use_web=true` can enable `web_search`/`web_fetch`, but an explicit
