@@ -1772,6 +1772,7 @@ function initializeEventListeners() {
   const MODE_TOOLS = [
     { btnId: 'web-toggle-btn',  checkboxId: 'web-toggle',  stateKey: 'web' },
     { btnId: 'bash-toggle-btn', checkboxId: 'bash-toggle', stateKey: 'bash' },
+    { btnId: 'docs-toggle-btn', checkboxId: 'docs-toggle', stateKey: 'docs' },
   ];
 
   function _modeKey(stateKey, mode) { return `${stateKey}_${mode}`; }
@@ -1792,6 +1793,7 @@ function initializeEventListeners() {
   const TOOL_TOGGLE_TOAST_LABELS = {
     web: 'Web search',
     bash: 'Shell',
+    docs: 'Documents',
   };
 
   function showToolToggleToast(stateKey, active) {
@@ -1841,7 +1843,7 @@ function initializeEventListeners() {
       const btn = el(btnId);
       if (!btn) return;
       // Hide bash button in chat mode
-      if (mode === 'chat' && stateKey === 'bash') {
+      if (mode === 'chat' && (stateKey === 'bash' || stateKey === 'docs')) {
         btn.style.display = 'none';
         return;
       }
@@ -1866,6 +1868,8 @@ function initializeEventListeners() {
     if (currentMode === 'chat') {
       const bashBtn = el('bash-toggle-btn');
       if (bashBtn) bashBtn.style.display = 'none';
+      const docsBtn = el('docs-toggle-btn');
+      if (docsBtn) docsBtn.style.display = 'none';
     }
 
     function setMode(mode) {
@@ -1958,6 +1962,7 @@ function initializeEventListeners() {
   const _toolSplashes = {
     web: { role: 'Web Search', text: 'Searches the web for relevant information to include in the response. Results are fetched and summarized before the AI answers.' },
     bash: { role: 'Shell Access', text: 'Gives the AI access to a sandboxed shell for running commands, installing packages, and executing scripts. Use with caution.' },
+    docs: { role: 'Document Tools', text: 'Keeps the document tools always available this turn, so the AI can create, patch, and manage editor documents even when the message does not mention them.' },
     builder: { role: 'Tool Builder', text: 'Create custom mini-apps and tools the AI can use. Describe what you need and the AI will build a tool you can reuse across conversations.' },
     research: { role: 'Deep Research', text: 'Multi-round web search with source analysis. Takes longer but produces comprehensive, well-sourced answers. Your next message will trigger a deep research cycle.' },
   };
@@ -2014,6 +2019,7 @@ function initializeEventListeners() {
   }
   setupToggle('web-toggle-btn', 'web-toggle', 'web');
   setupToggle('bash-toggle-btn', 'bash-toggle', 'bash');
+  setupToggle('docs-toggle-btn', 'docs-toggle', 'docs');
   try { workspaceModule.initWorkspace(); } catch (_) {}
 
   // Document editor toggle (special: uses module panel, not a checkbox)
@@ -2312,7 +2318,7 @@ function initializeEventListeners() {
     if (!inputLeft || !overflowMenu || !overflowWrapper) return;
 
     // Buttons that can be collapsed (in reverse priority — last collapsed first)
-    const collapsibleIds = ['bash-toggle-btn', 'web-toggle-btn'];
+    const collapsibleIds = ['docs-toggle-btn', 'bash-toggle-btn', 'web-toggle-btn'];
     const collapsibleBtns = collapsibleIds.map(id => el(id)).filter(Boolean);
     // Map of toolbar btn id → overflow mirror element (created dynamically)
     const overflowMirrors = new Map();
