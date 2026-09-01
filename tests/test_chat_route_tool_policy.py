@@ -22,6 +22,14 @@ from src.tool_policy import (
 
 _CHAT_ROUTES = Path(__file__).resolve().parent.parent / "routes" / "chat_routes.py"
 
+_DOC_TOOL_NAMES = frozenset({
+    "create_document",
+    "edit_document",
+    "update_document",
+    "suggest_document",
+    "manage_documents",
+})
+
 
 # ── Source-level guards ─────────────────────────────────────────
 
@@ -52,6 +60,29 @@ def test_allow_bash_reads_from_body_as_fallback():
     assert found_body_fallback, (
         "allow_bash assignment in chat_stream must fall back to JSON body"
     )
+
+
+def test_allow_documents_reads_from_body_as_fallback():
+    """chat_stream must read allow_documents from the JSON body, not just form_data."""
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert (
+        'allow_documents = form_data.get("allow_documents") or (body or {}).get("allow_documents")'
+        in source
+    )
+
+
+def test_route_force_includes_doc_tools_when_toggle_on():
+    """A ticked Documents toggle (allow_documents="true") force-includes the doc tools."""
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'allow_documents is not None and str(allow_documents).lower() == "true"' in source
+    assert "_forced_tools.update(DOCUMENT_TOOL_NAMES)" in source
+
+
+def test_route_strips_doc_tools_when_toggle_off():
+    """An explicit allow_documents="false" strips the doc tools."""
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'allow_documents is not None and str(allow_documents).lower() != "true"' in source
+    assert "disabled_tools.update(DOCUMENT_TOOL_NAMES)" in source
 
 
 def test_allow_web_search_reads_from_body_as_fallback():
@@ -132,6 +163,7 @@ def test_workspace_auto_escalation_keeps_shell_tools():
 
 def _build_disabled_tools(
     allow_bash=None,
+    allow_documents=None,
     allow_web_search=None,
     use_web=None,
     can_use_bash=True,
@@ -148,6 +180,8 @@ def _build_disabled_tools(
     # Issue #3229 fix: only disable bash when explicitly set to a falsy value.
     if allow_bash is not None and str(allow_bash).lower() != "true":
         disabled_tools.add("bash")
+    if allow_documents is not None and str(allow_documents).lower() != "true":
+        disabled_tools.update(_DOC_TOOL_NAMES)
     search_enabled = web_search_enabled_for_turn(allow_web_search, use_web)
     if is_web_search_explicitly_denied(allow_web_search) or not search_enabled:
         disabled_tools.update(WEB_TOOL_NAMES)
@@ -177,6 +211,30 @@ def _build_disabled_tools(
         disabled_tools.update(global_disabled)
 
     return disabled_tools
+
+
+def test_allow_documents_true_keeps_doc_tools():
+    """API caller sending {"allow_documents": true} gets doc tools enabled."""
+    disabled = _build_disabled_tools(allow_documents="true")
+    assert not (disabled & _DOC_TOOL_NAMES)
+
+
+def test_allow_documents_false_strips_doc_tools():
+    """API caller sending {"allow_documents": false} gets doc tools disabled."""
+    disabled = _build_disabled_tools(allow_documents="false")
+    assert _DOC_TOOL_NAMES <= disabled
+
+
+def test_allow_documents_unset_leaves_doc_tools_to_rag():
+    """No allow_documents sent (older clients) — nothing doc-related is stripped."""
+    disabled = _build_disabled_tools(allow_documents=None)
+    assert not (disabled & _DOC_TOOL_NAMES)
+
+
+def test_frontend_always_sends_explicit_allow_documents():
+    """chat.js must always send allow_documents (both true and false)."""
+    source = (Path(__file__).resolve().parent.parent / "static" / "js" / "chat.js").read_text(encoding="utf-8")
+    assert "allow_documents', el('docs-toggle').checked ? 'true' : 'false'" in source
 
 
 def test_json_body_allow_bash_true_enables_bash():

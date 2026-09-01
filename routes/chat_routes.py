@@ -72,6 +72,17 @@ from src.tool_approvals import tool_approval_store
 
 logger = logging.getLogger(__name__)
 
+# Editor-panel document tools. The "Documents" toolbar toggle
+# (allow_documents) force-includes these on ticked turns and strips them
+# when explicitly off — mirroring the bash toggle (allow_bash).
+DOCUMENT_TOOL_NAMES = frozenset({
+    "create_document",
+    "edit_document",
+    "update_document",
+    "suggest_document",
+    "manage_documents",
+})
+
 # Track active streams for partial-save safety net
 _active_streams: Dict[str, dict] = {}
 
@@ -963,6 +974,7 @@ def setup_chat_routes(
         # JSON body as fallback so callers who send {"allow_bash": true}
         # actually get bash enabled.
         allow_bash = form_data.get("allow_bash") or (body or {}).get("allow_bash")
+        allow_documents = form_data.get("allow_documents") or (body or {}).get("allow_documents")
         allow_web_search = form_data.get("allow_web_search") or (body or {}).get("allow_web_search")
         use_rag = form_data.get("use_rag")
         search_context = form_data.get("search_context")  # pre-fetched web search results (compare mode)
@@ -1454,6 +1466,11 @@ def setup_chat_routes(
         # explicitly enable it.
         if allow_bash is not None and str(allow_bash).lower() != "true":
             disabled_tools.add("bash")
+        # Ticked "Documents" toggle: strip doc tools only when explicitly
+        # OFF. Unset (None) means the caller didn't say — RAG decides,
+        # same as before this toggle existed.
+        if allow_documents is not None and str(allow_documents).lower() != "true":
+            disabled_tools.update(DOCUMENT_TOOL_NAMES)
         _explicit_web_intent = _explicit_web_intent or bool(_tool_intent and _tool_intent.category == "web")
         if is_web_search_explicitly_denied(allow_web_search) or not _search_enabled:
             disabled_tools.update(WEB_TOOL_NAMES)
@@ -1538,10 +1555,16 @@ def setup_chat_routes(
         # the heavy "do things on the computer" tools — otherwise the model
         # tries to shell out for a request that never needed it, then fails
         # (and looks broken when the shell is disabled).
+        # Exception: a ticked bash toggle (allow_bash="true") means the user
+        # asked for the shell, so bash + its file companions must survive the
+        # strip — ALWAYS_AVAILABLE is meant to be honored. An explicit OFF
+        # (allow_bash="false") still strips bash via the toggle check above.
+        _bash_explicitly_on = allow_bash is not None and str(allow_bash).lower() == "true"
         if auto_escalated and not _workspace_agent_intent:
-            disabled_tools.update({
-                "bash", "python", "read_file", "write_file",
-            })
+            if not _bash_explicitly_on:
+                disabled_tools.update({
+                    "bash", "python", "read_file", "write_file",
+                })
             if not _allow_browser_for_web_turn:
                 disabled_tools.update(_BROWSER_MCP_TOOLS)
 
@@ -2303,6 +2326,14 @@ def setup_chat_routes(
                         if _forced_tools is None:
                             _forced_tools = set()
                         _forced_tools.add("bash")
+                    # Ticked "Documents" toggle: doc tools are always
+                    # available this turn, not only when the message
+                    # happens to retrieve them (edit_document = "patch the
+                    # open document" must survive RAG variance).
+                    if allow_documents is not None and str(allow_documents).lower() == "true":
+                        if _forced_tools is None:
+                            _forced_tools = set()
+                        _forced_tools.update(DOCUMENT_TOOL_NAMES)
 
                     async for chunk in stream_agent_loop(
                         sess.endpoint_url,
