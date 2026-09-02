@@ -6336,8 +6336,6 @@ import { invalidateSettings } from './appConfig.js';
       lastActivity: Date.now(),
     });
     _syncForegroundStreamGlobals();
-    const submitBtn = document.querySelector('.send-btn');
-    if (submitBtn) updateSubmitButton('streaming', submitBtn);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
