@@ -1,6 +1,6 @@
 # Context Building
 
-Last updated: dev@e71f8ce | 2026-08-25
+Last updated: dev@ce04dc1d | 2026-09-03
 
 ## Scope
 
@@ -34,6 +34,16 @@ Runtime rules:
 - preserve the user's original message for the model;
 - do not use regex preprocessing to force literal-vs-fetch intent;
 - do not disable tools or force a reply style solely because preprocessing found a URL.
+
+## Intent-Derived Prompt Blocks
+
+`agent_loop` appends classifier-driven instruction blocks to the agent prompt (not part of the base system prompt); the two are mutually exclusive per turn (elif):
+
+- **workspace bound** (and not suppressed): `_workspace_coding_rules(workspace)` — "Workspace coding mode": relative paths resolve against the bound root, file tools over shell for repo edits (`apply_patch`/`edit_file`/`write_file`), verify after changes, and "do not use personal-assistant tools like email, calendar, notes, memory, documents, gallery, or UI panels for workspace work".
+- **else, selected tools intersect `_WORKSPACE_TERMINUS_TOOLS`** (the confined toolset — see agent-tools.md): `_local_computer_rules()` — "Odysseus Terminus local-machine mode": target-machine scoping (Cookbook server names / SSH aliases), `get_workspace` first, dedicated file tools over shell, no personal-assistant tools (memory, email, notes, calendar, documents, gallery, UI) for machine work unless explicitly asked, no executing downloaded/untrusted scripts, ask for a folder rather than guess.
+
+The second block is triggered by TOOLSET SELECTION, not by user wording: any turn confined by the local-machine detector — including turns with no workspace bound and no coding words (a bare `on <word>`/`from <word>` phrase) — gets the machine-mode block, whose no-personal-assistant-tools rule makes same-turn memory requests unactionable (the `manage_memory` schema is not in the turn's toolset). Memory edits therefore land on turns phrased as assistant-domain requests ("remember X", "update memory with X") without coding targets, absolute paths, or on/from-machine phrases in the same retrieval query.
+
 
 ## Untrusted Data
 

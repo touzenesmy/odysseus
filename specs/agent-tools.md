@@ -1,6 +1,6 @@
 # Agent Tools
 
-Last updated: dev@e71f8ce | 2026-08-25
+Last updated: dev@ce04dc1d | 2026-09-03
 
 ## Scope
 
@@ -48,6 +48,19 @@ Guide-only/no-tools turns are runtime policy, not prompt advice. `src.tool_polic
 Plan mode is a read-only investigation path inside the same loop. It adds a denylist for known mutating tools, filters write/unknown MCP tools, prepends plan-mode instructions, and uses the `update_plan` tool only after a plan is approved for execution. The backend path still exists for compatibility, but current browser chat forces incoming `plan_mode` off and the old plan-window UI module is gone.
 
 Workspace mode is request-scoped. Admin chat can send a workspace directory selected through `static/js/workspace.js`; `agent_loop` injects that fact early in the prompt and `tool_execution` confines bash, python, read/write/edit-file, and code-navigation tools to that root. `routes.workspace_routes` owns admin-only browse/vet APIs, skips hidden/symlink directory traversal, caps listings, and rejects sensitive/root paths before a workspace reaches chat.
+
+## Toolset Confinement (Terminus Toolset)
+
+When a turn is classified as workspace-coding or local-machine work, retrieval-selected tools are REPLACED, not extended: `_relevant_tools = set(_WORKSPACE_TERMINUS_TOOLS)` — the `files` domain tools (`bash`, `python`, `read_file`, `write_file`, `edit_file`, `apply_patch`, `todowrite`, `grep`, `glob`, `ls`, `get_workspace`, `manage_bg_jobs`) plus `manage_skills`, `ask_teacher`, `web_search`, `web_fetch`, `ask_user`, `update_plan`. The replacement bypasses the `ALWAYS_AVAILABLE` merge in `src.tool_index`, so `manage_memory` and the other personal-assistant tools (notes, calendar, tasks, documents, email, sessions, cookbook, settings, MCP admin) are absent from confined turns even when enabled in settings. This is a focus heuristic, not a security boundary: `bash`/`python` stay in the set.
+
+Two independent triggers (both evaluated against the retrieval query; for explicit continuation turns the retrieval query inherits recent user turns, so a trigger phrase from a few turns back can confine a later turn):
+
+- **workspace branch** — workspace bound AND `_looks_like_workspace_coding_request` matches: a coding action verb (`_WORKSPACE_CODE_ACTION_RE`) plus a code target (`_WORKSPACE_CODE_TARGET_RE` — `repo|file|path|branch|...` or any `/absolute/path`), or the `pr|diff|patch` shortcut (word-boundary `pr` also matches e.g. "5-PR").
+- **local-machine branch** — `_looks_like_local_computer_request` matches: `on|from|in|using|with this|my|the computer|machine|pc|laptop|device|system`, `local|host computer|machine|files|system`, or any bare `on <word>` / `from <word>` phrase (any word except `this|my|the|a|an`). Fires with NO workspace bound — the confined toolset is not workspace-exclusive. A bound workspace confines only coding-looking turns; casual turns with a workspace bound keep the normal RAG set (including `manage_memory`).
+
+The confined set also gates the prompt: when no workspace rule is appended (workspace unbound or suppressed) and the selected tools intersect `_WORKSPACE_TERMINUS_TOOLS`, `agent_loop` appends the "Odysseus Terminus local-machine mode" block (see context-building.md). With a workspace bound, `_workspace_coding_rules` is appended instead; the two blocks are mutually exclusive per turn. Both instruct the model not to use personal-assistant tools — including memory — for that turn.
+
+Missing-workspace guard: with no workspace bound, if `_explicitly_references_missing_workspace` matches the retrieval query — `in|inside|within|from|this|current|active (the) workspace` or `this|current|active (workspace|repo|project)` — `stream_agent_loop` returns the fixed "No active workspace is set. Use `/workspace pick` or `/workspace set /absolute/path`, then rerun the request." message and stops BEFORE the LLM call (metrics show `tool_calls: 0`). The matcher only catches the one-word `workspace`; a spaced "work space" does not match. The check runs against the retrieval query, so a recent continuation turn's explicit reference can block a later turn that does not itself mention the workspace.
 
 ## Tool Registry
 
