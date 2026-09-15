@@ -443,6 +443,10 @@ class ChatContext:
     # retained only when explicit foreground fallbacks are enabled so each
     # concrete candidate can apply its own context budget independently.
     route_messages: list = field(default_factory=list)
+    # DB id of the user message persisted for this turn (None when the turn
+    # was not persisted, e.g. incognito or approval continuations). The chat
+    # stream emits it so the UI can stamp the user bubble for edit/delete.
+    user_message_db_id: Optional[str] = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────── #
@@ -1075,6 +1079,7 @@ async def build_chat_context(
     # Add user message to history. Nobody/incognito uses a request-local
     # transcript store instead of session history so stale saved chats cannot
     # bleed into context and the turn is not persisted.
+    user_message_db_id: Optional[str] = None
     if persist_user_message and incognito:
         user_meta = {}
         if preprocessed.attachment_meta:
@@ -1093,6 +1098,13 @@ async def build_chat_context(
             interaction_mode=interaction_mode,
             auto_escalated=auto_escalated,
         )
+
+        # _persist_message stamps the row id onto the in-memory message after
+        # commit. Keep it on the context so the stream can hand it to the UI;
+        # user bubbles otherwise have no id (message_saved covers AI only).
+        last = sess.history[-1] if getattr(sess, "history", None) else None
+        if last is not None and getattr(last, "metadata", None):
+            user_message_db_id = last.metadata.get("_db_id")
 
     # Fire events
     if persist_user_message and not incognito:
@@ -1326,6 +1338,7 @@ async def build_chat_context(
         auto_opened_docs=auto_opened_docs,
         uploaded_files=uploaded_files,
         route_messages=route_messages,
+        user_message_db_id=user_message_db_id,
     )
 
 
