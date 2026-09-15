@@ -77,10 +77,18 @@ else
         echo ""
         echo "!!! WARNING: Local branch '$BRANCH' is $LOCAL_AHEAD commit(s) ahead of $REMOTE_NAME/$BRANCH !!!"
         echo "    Running this script will OVERWRITE those local commits."
-        echo "    Push them first: git push $REMOTE_NAME $BRANCH"
+        echo "    Push them first: git push --force-with-lease $REMOTE_NAME $BRANCH"
         echo ""
-        read -rp "    Continue anyway and discard local commits? [y/N]: " FORCE_CHOICE
+        echo "  [p] Push local commits to $REMOTE_NAME with --force-with-lease, then continue (recommended)"
+        echo "  [y] Continue anyway and discard local commits"
+        echo "  [n] Abort update"
+        echo ""
+        read -rp "Choose [p/y/n] [p]: " FORCE_CHOICE
         case "$FORCE_CHOICE" in
+            p|P|"")
+                git push --force-with-lease "$REMOTE_NAME" "$BRANCH"
+                echo ">> Local commits pushed to $REMOTE_NAME/$BRANCH."
+                ;;
             y|Y)
                 echo ">> Proceeding — local commits will be lost."
                 ;;
