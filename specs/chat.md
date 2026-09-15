@@ -44,6 +44,7 @@ Runtime behavior:
 - message metadata carries timestamps, metrics, tool events, sources, hidden
   thinking/reasoning text when providers expose it separately, context-trim
   metrics, structured attachment references, and related UI state;
+- message row ids reach the UI as `dataset.dbId` on chat bubbles (the delete/edit target): live via SSE events (`message_saved` for assistant turns, `user_message_saved` for user turns, emitted at stream start from the just-persisted row), and on refresh via `metadata._db_id` in history responses. The DB row itself does NOT persist `_db_id` (it is stamped in memory post-commit), so both history serializers stamp it from the row (`_db_to_session` in-memory, `_db_history_entry` paginated DB path). A bubble without `dataset.dbId` silently degrades delete/edit to DOM-only removal — the row survives a refresh (2026-09-15 regression, `22b0d3bf`, `tests/test_delete_message_db_id_stamp.py`);
 - metadata preserves requested and actual reply models and endpoints, per-round route transitions, and answering-route cost attribution; stable session ids remain available so prompt/sequence-memory and KV-cache paths can address the same conversation consistently;
 - multimodal content can be a list of content blocks for the live provider call,
   while persistence collapses raw media into readable text and stable
