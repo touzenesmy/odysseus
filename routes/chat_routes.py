@@ -3801,6 +3801,14 @@ def setup_chat_routes(
             if not tool_approval_continuation:
                 yield f"data: {json.dumps({'type': 'turn_mode', 'mode': _effective_mode, 'auto_escalated': auto_escalated})}\n\n"
 
+            # Hand the UI the persisted id of the user message (assistant
+            # bubbles get theirs via message_saved on completion). Without it
+            # the user bubble has no dataset.dbId, so edit/delete silently
+            # degrades to DOM-only and the rows survive a refresh.
+            _user_msg_db_id = getattr(ctx, "user_message_db_id", None)
+            if _user_msg_db_id:
+                yield f"data: {json.dumps({'type': 'user_message_saved', 'id': _user_msg_db_id})}\n\n"
+
             # The client sent a workspace the server refused to bind (deleted
             # folder, file path, sensitive dir, filesystem root). Tell it up
             # front so the UI can clear the pill instead of displaying a

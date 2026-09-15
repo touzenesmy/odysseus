@@ -4679,6 +4679,13 @@ import { invalidateSettings } from './appConfig.js';
                   refreshChatContextHeader('metrics');
                 }
 
+              } else if (json.type === 'user_message_saved') {
+                // Mirror of message_saved for the user bubble: the server
+                // persists the user message before the model starts but never
+                // sent its row id back, so stamp it here for edit/delete.
+                if (_isBg) continue;
+                if (_userMsgEl && json.id) _userMsgEl.dataset.dbId = json.id;
+
               } else if (json.type === 'message_saved') {
                 // Wire the persisted DB id onto the just-streamed bubble so it
                 // can be edited/deleted immediately, without reloading the chat.
