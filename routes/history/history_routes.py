@@ -135,6 +135,12 @@ def setup_history_routes(session_manager, upload_handler=None) -> APIRouter:
                 meta = json.loads(m.meta_data) or {}
             except (json.JSONDecodeError, ValueError):
                 meta = {}
+        # Mirror session_manager._db_to_session: stamp the row id so the UI
+        # can target this message in edit/delete requests. The DB row never
+        # stores _db_id (it is stamped after commit), so without this, bubbles
+        # rendered from the paginated DB path have no id and message deletion
+        # silently degrades to DOM-only.
+        meta["_db_id"] = m.id
         if m.timestamp and "timestamp" not in meta:
             meta["timestamp"] = m.timestamp.isoformat() + "Z"
         if meta:
