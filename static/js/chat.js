@@ -6356,75 +6356,51 @@ import { loadPanel } from './panels.js';
 
     const clickedIsUser = msgElement.classList.contains('msg-user');
 
-    // Find the user+AI pair
-    let userIndex = -1;
-    let aiIndex = -1;
-    if (clickedIsUser) {
-      userIndex = clickedIndex;
-      // Find the following AI message
-      for (let i = clickedIndex + 1; i < allMsgs.length; i++) {
-        if (allMsgs[i].classList.contains('msg-ai') && !allMsgs[i].classList.contains('msg-continuation')) {
-          aiIndex = i;
-          break;
-        }
-        if (allMsgs[i].classList.contains('msg-user')) break; // next user msg, no AI response
-      }
-    } else {
-      // If clicked on a continuation, walk back to the main AI message
-      let mainAiIndex = clickedIndex;
-      if (allMsgs[mainAiIndex].classList.contains('msg-continuation')) {
-        for (let i = mainAiIndex - 1; i >= 0; i--) {
-          if (allMsgs[i].classList.contains('msg-ai') && !allMsgs[i].classList.contains('msg-continuation')) {
-            mainAiIndex = i;
-            break;
-          }
-        }
-      }
-      aiIndex = mainAiIndex;
-      // Find the preceding user message
-      for (let i = aiIndex - 1; i >= 0; i--) {
-        if (allMsgs[i].classList.contains('msg-user')) {
+    // A delete removes the WHOLE turn the clicked bubble belongs to: the
+    // owning user message plus EVERY assistant row of that turn, up to the
+    // next user message. One turn can span several assistant rows (a
+    // tool-approval question row followed by the response row; interrupted
+    // and continued runs), so pairing only the first AI bubble orphans the
+    // rest: when the user prompt is deleted, the remaining rows survive a
+    // refresh with no user prompt before them and corrupt the model context
+    // (2026-09-15).
+    const isUserEl = el => el && el.classList.contains('msg-user');
+
+    // Owning user bubble: the clicked one, or the nearest preceding one.
+    let userIndex = clickedIsUser ? clickedIndex : -1;
+    if (userIndex < 0) {
+      for (let i = clickedIndex - 1; i >= 0; i--) {
+        if (isUserEl(allMsgs[i])) {
           userIndex = i;
           break;
         }
       }
     }
 
-    // Collect DB message IDs and DOM elements to remove
-    const msgIds = [];
-    const domToRemove = [];
-
-    // Add the user message if found
-    if (userIndex >= 0) {
-      domToRemove.push(allMsgs[userIndex]);
-      const uid = allMsgs[userIndex].dataset.dbId;
-      if (uid) msgIds.push(uid);
+    // Turn end: the next user bubble after the owning one (exclusive).
+    // With no owning user (orphaned AI bubble, e.g. its prompt was already
+    // deleted), remove from the clicked bubble to the next user bubble.
+    let endEl = null;
+    const startEl = userIndex >= 0 ? allMsgs[userIndex] : allMsgs[clickedIndex];
+    for (let i = (userIndex >= 0 ? userIndex : clickedIndex) + 1; i < allMsgs.length; i++) {
+      if (isUserEl(allMsgs[i])) {
+        endEl = allMsgs[i];
+        break;
+      }
     }
 
-    // Add the AI message if found
-    if (aiIndex >= 0) {
-      domToRemove.push(allMsgs[aiIndex]);
-      const aid = allMsgs[aiIndex].dataset.dbId;
-      if (aid) msgIds.push(aid);
-
-      const aiEl = allMsgs[aiIndex];
-      // Also remove agent-thread elements BETWEEN user and AI
-      if (userIndex >= 0) {
-        let between = allMsgs[userIndex].nextElementSibling;
-        while (between && between !== aiEl) {
-          domToRemove.push(between);
-          between = between.nextElementSibling;
-        }
-      }
-      // Walk forward from the AI element to remove continuations and tool bubbles
-      let sibling = aiEl.nextElementSibling;
-      while (sibling) {
-        if (sibling.classList.contains('msg-user') ||
-            (sibling.classList.contains('msg-ai') && !sibling.classList.contains('msg-continuation'))) {
-          break;
-        }
-        domToRemove.push(sibling);
-        sibling = sibling.nextElementSibling;
+    // Collect DB message IDs and DOM elements across the whole turn (the
+    // element walk also picks up agent-thread/tool bubbles between rows;
+    // continuation bubbles share their row's id, so dedup keeps it once).
+    const msgIds = [];
+    const seenIds = new Set();
+    const domToRemove = [];
+    for (let el = startEl; el && el !== endEl; el = el.nextElementSibling) {
+      domToRemove.push(el);
+      const id = el.dataset ? el.dataset.dbId : null;
+      if (id && !seenIds.has(id)) {
+        seenIds.add(id);
+        msgIds.push(id);
       }
     }
 
