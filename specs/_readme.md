@@ -1,6 +1,6 @@
 # Specs DocumentMap
 
-Last updated: dev@e71f8ce | 2026-08-25
+Last updated: dev@3b6c1691 | 2026-09-16
 
 This folder is the compact implementation-truth map for humans and coding agents working on Odysseus. Read this file first, then open only the subsystem specs that match the work.
 
@@ -68,6 +68,7 @@ project documentation.
 - [shell-mcp.md](shell-mcp.md): shell execution, background jobs, MCP manager, built-in MCP servers.
 - [settings-admin.md](settings-admin.md): settings, preferences, presets, backup/import/export, diagnostics, admin wipe.
 - [testing-devops.md](testing-devops.md): pytest, JS tests, Docker, scripts, requirements, local dev expectations.
+- [instance-map.md](instance-map.md): personal instance map for this installation — Improvements branch layout, lessons, session log (machine-specific; gitignored, never push).
 
 ## Cross-Cutting Spec Update Triggers
 
