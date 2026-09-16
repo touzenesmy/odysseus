@@ -22,6 +22,13 @@ faster-whisper
 kokoro==0.9.4; python_version >= "3.11" and python_version < "3.13"
 soundfile; python_version >= "3.11" and python_version < "3.13"
 
+# Local text-to-speech via Piper (C++/ONNX, CPU) for the "piper" TTS provider.
+# Kokoro's alternative for Python 3.13+ runtimes (Kokoro declares <3.13).
+# Voice files are separate per-voice .onnx downloads (see the Piper voice
+# cache dir, default ~/.cache/piper-voices), not pip packages.
+piper-tts
+onnxruntime
+
 # DuckDuckGo as a search provider option.
 # Install if you want DDG in the search-provider dropdown.
 # Alternatives: SearXNG, Brave, Tavily, Serper, Google PSE.

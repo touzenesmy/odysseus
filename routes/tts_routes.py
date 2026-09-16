@@ -7,12 +7,14 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 class TTSRequest(BaseModel):
     text: str
     format: str = "audio"  # "audio" or "base64"
+    voice: Optional[str] = None  # provider voice override (auditions)
 
 def setup_tts_routes(tts_service):
     """Setup TTS routes with the provided TTS service"""
@@ -27,6 +29,15 @@ def setup_tts_routes(tts_service):
             logger.error(f"Failed to get TTS stats: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
+    @router.get("/voices")
+    async def get_tts_voices():
+        """List cached Piper voices (name + display metadata) for settings."""
+        try:
+            return {"voices": tts_service.list_piper_voices()}
+        except Exception as e:
+            logger.error(f"Failed to list Piper voices: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
     @router.post("/synthesize")
     async def synthesize_speech(request: TTSRequest):
         """Synthesize speech from text"""
@@ -38,7 +49,9 @@ def setup_tts_routes(tts_service):
                 )
             
             if request.format == "base64":
-                audio_b64 = tts_service.synthesize_to_base64(request.text)
+                audio_b64 = tts_service.synthesize_to_base64(
+                    request.text, voice=request.voice
+                )
                 if not audio_b64:
                     raise HTTPException(
                         status_code=500,
@@ -47,7 +60,7 @@ def setup_tts_routes(tts_service):
                 return {"audio": audio_b64}
             
             else:  # audio format
-                audio_data = tts_service.synthesize(request.text)
+                audio_data = tts_service.synthesize(request.text, voice=request.voice)
                 if not audio_data:
                     raise HTTPException(
                         status_code=500,
