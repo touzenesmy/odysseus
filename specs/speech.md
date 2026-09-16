@@ -1,6 +1,6 @@
 # Speech
 
-Last updated: dev@e71f8ce | 2026-08-25
+Last updated: dev@3b6c1691 | 2026-09-16
 
 ## Scope
 
@@ -64,6 +64,18 @@ Provider runtime:
 - `disabled` returns unavailable and avoids provider calls;
 - `browser` is client-side only through `speechSynthesis`;
 - `local` currently means Kokoro and requires `torch`, `kokoro`, `soundfile`, and CUDA/import availability;
+- `piper` is the local CPU engine (`piper-tts` 1.8, C++/ONNX — no torch,
+  works on Python 3.13+ where Kokoro cannot run). Voices are flat `*.onnx`
+  files in `~/.cache/piper-voices` (override `ODYSSEUS_PIPER_VOICE_DIR`);
+  voice names are sanitized (path-shaped or empty values are refused) and
+  models lazy-load and cache per voice name. Availability is a file stat of
+  the configured voice, not a model load. The voice's sidecar `.onnx.json`
+  supplies display metadata (language/quality/sample rate) and is optional
+  per voice (missing or malformed sidecars list the voice name-only).
+  `tts_speed` maps to `SynthesisConfig.length_scale` (1.0x keeps the voice
+  defaults; 2x halves it). `synthesize(text, voice=...)` and
+  `synthesize_to_base64(text, voice=...)` accept a per-call voice override so
+  the settings UI can audition a voice without writing settings.
 - `endpoint:<id>` resolves a `ModelEndpoint` and posts to `/audio/speech`.
 - unknown or non-string `tts_provider` values are treated as unavailable rather
   than being parsed as endpoint strings.
@@ -71,6 +83,10 @@ Provider runtime:
 Route behavior:
 
 - `/api/tts/synthesize` supports binary `audio` responses and JSON `base64` responses;
+- `TTSRequest.voice` is an optional provider voice override, forwarded to
+  synthesis (used for auditions);
+- `GET /api/tts/voices` lists cached Piper voices (name plus display
+  metadata) for the settings UI; it never loads models;
 - binary responses choose WAV or MP3 MIME by audio magic bytes;
 - synthesis input is passed to the service as submitted and capped there;
 - malformed or nonpositive `tts_speed` falls back to `1.0`;
@@ -80,7 +96,7 @@ Route behavior:
 
 Speech providers are global settings under `data/settings.json`, with defaults in `src/settings.py`. Settings reads are scrubbed for non-admin callers, writes are admin-only, and `manage_settings` can change non-secret speech settings through aliases.
 
-Visible UI state is not complete: backend and JS speech settings exist, the TTS settings card is currently hidden, and the STT settings JS exits when its removed DOM nodes are absent.
+Visible UI state is not complete: backend and JS speech settings exist, and the STT settings JS exits when its removed DOM nodes are absent. The TTS settings card was restored 2026-09-16 (it had been hidden in the DOM): it shows Provider (disabled/browser/local/piper/endpoint), a Piper voice dropdown fed by `GET /api/tts/voices` with an Audition button (fixed sentence, voice override, no settings write), and the existing Preview button honors the selected Piper voice.
 
 `routes.model_routes` clears `tts_provider` and `stt_provider` references when a referenced model endpoint is deleted.
 
@@ -110,6 +126,7 @@ TTS cached audio can contain sensitive assistant text rendered as speech. The ca
 - Optional local speech packages may be absent.
 - Local STT can run CPU-only and tolerates missing/broken torch by falling back to CPU/int8 behavior.
 - Local TTS/Kokoro extras are declared as `kokoro==0.9.4` plus `soundfile` only for Python 3.11-3.12; Python 3.13+ intentionally skips them because Kokoro excludes those runtimes. Even where installed, local Kokoro remains unavailable without a CUDA-capable torch build/GPU.
+- Piper extras (`piper-tts`, `onnxruntime`) are optional with no version pin and work on all supported runtimes including 3.13+; a missing voice file or missing package degrades to `available: false` (piper) or a per-request synthesis failure, not a crash.
 - External endpoint providers can be offline or misconfigured and may only fail at request time.
 - Browser `speechSynthesis`, `SpeechRecognition`, `webkitSpeechRecognition`, secure context, and microphone permissions can be absent.
 - Docker GPU overlays are passthrough-only and do not install speech engines by themselves.
@@ -117,7 +134,7 @@ TTS cached audio can contain sensitive assistant text rendered as speech. The ca
 
 ## Testing Coverage
 
-Existing coverage includes speech service toggles, malformed/non-string TTS provider and speed handling, cache stats plus configured eviction/disable/file filtering/error handling, STT temp cleanup, direct upload limits, model routes, and settings scrubbing.
+Existing coverage includes speech service toggles, malformed/non-string TTS provider and speed handling, cache stats plus configured eviction/disable/file filtering/error handling, STT temp cleanup, direct upload limits, model routes, settings scrubbing, and the Piper provider (tests/test_tts_piper_provider.py: availability, voice-name sanitization, voice listing with/without sidecars, synthesis + cache keys + speed mapping, `/api/tts/voices` and the voice-override route contract).
 
 Missing coverage includes route-level STT/TTS success and failure shapes, auth/API-token behavior, endpoint owner isolation, STT type/magic rejection, TTS request-size/no-store/cache privacy behavior, degraded optional dependency paths, and frontend recorder/TTS fallback states.
 
