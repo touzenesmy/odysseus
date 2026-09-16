@@ -130,3 +130,4 @@ docker-compose-baremetal.*
 # Personal instance map — machine-specific paths; lives in specs/ (documentation home), never push
 docs/instance-map.md
 specs/instance-map.md
+specs/instance/
