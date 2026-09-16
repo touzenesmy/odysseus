@@ -68,6 +68,7 @@ project documentation.
 - [shell-mcp.md](shell-mcp.md): shell execution, background jobs, MCP manager, built-in MCP servers.
 - [settings-admin.md](settings-admin.md): settings, preferences, presets, backup/import/export, diagnostics, admin wipe.
 - [testing-devops.md](testing-devops.md): pytest, JS tests, Docker, scripts, requirements, local dev expectations.
+- [instance-map.md](instance-map.md): personal instance map for this installation — Improvements branch layout, lessons, session log (machine-specific; gitignored, never push).
 
 ## Cross-Cutting Spec Update Triggers
 
