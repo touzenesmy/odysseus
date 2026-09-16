@@ -3,6 +3,7 @@
 
 import io
 import os
+import json
 import wave
 import logging
 import hashlib
@@ -42,6 +43,7 @@ class TTSService:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._kokoro = None  # lazy-init
+        self._piper_voices: Dict[str, Any] = {}  # voice name -> PiperVoice
         
         try:
             self.max_cache_bytes = int(os.getenv("ODYSSEUS_TTS_CACHE_MAX_BYTES", 500 * 1024 * 1024))
@@ -74,6 +76,10 @@ class TTSService:
         if provider == "local":
             kokoro = self._get_kokoro()
             return kokoro is not None and kokoro.available
+        if provider == "piper":
+            # Honest availability: the configured voice must be cached
+            # (a stat + optional sidecar read, no model load).
+            return self._piper_voice_path(settings["tts_voice"]) is not None
         if isinstance(provider, str) and provider.startswith("endpoint:"):
             return True  # assume reachable; errors surface at synthesis time
         return False
@@ -156,6 +162,112 @@ class TTSService:
             self._kokoro = _KokoroPipeline()
         return self._kokoro
 
+    # ── Piper (local, CPU) ──
+
+    def _piper_voice_dir(self) -> Path:
+        """Where Piper voice files live. Defaults to ~/.cache/piper-voices;
+        override with ODYSSEUS_PIPER_VOICE_DIR for other layouts."""
+        return Path(os.getenv(
+            "ODYSSEUS_PIPER_VOICE_DIR",
+            str(Path.home() / ".cache" / "piper-voices"),
+        ))
+
+    def _piper_voice_path(self, voice) -> Optional[Path]:
+        """Resolve a voice name to a cached .onnx file (or None)."""
+        if not isinstance(voice, str):
+            return None
+        name = voice.strip()
+        # Voice names are flat file stems; refuse anything path-shaped.
+        if not name or "/" in name or "\\" in name or name.startswith((".", "~")):
+            return None
+        path = self._piper_voice_dir() / f"{name}.onnx"
+        return path if path.is_file() else None
+
+    def _get_piper_voice(self, voice):
+        """Lazy-load a PiperVoice, caching the model per voice name."""
+        path = self._piper_voice_path(voice)
+        if path is None:
+            return None
+        cached = self._piper_voices.get(voice)
+        if cached is not None:
+            return cached
+        from piper import PiperVoice
+        model = PiperVoice.load(str(path))
+        self._piper_voices[voice] = model
+        return model
+
+    @staticmethod
+    def _piper_voice_meta(path: Path) -> Dict[str, Any]:
+        """Display metadata from a voice's sidecar .onnx.json, tolerant of a
+        missing or malformed sidecar (the voice still lists, name-only)."""
+        meta: Dict[str, Any] = {}
+        try:
+            data = json.loads((path.parent / (path.name + ".json")).read_text())
+            lang = data.get("language") or {}
+            meta["language"] = (
+                lang.get("name_english") or lang.get("name_native")
+                or (lang.get("code") or "").replace("_", " ")
+            )
+            meta["locale"] = lang.get("code", "")
+            audio = data.get("audio") or {}
+            meta["quality"] = audio.get("quality", "")
+            meta["sample_rate"] = audio.get("sample_rate")
+        except Exception:
+            pass
+        return meta
+
+    def list_piper_voices(self) -> list:
+        """Cached Piper voices for the settings UI (no models loaded)."""
+        d = self._piper_voice_dir()
+        if not d.is_dir():
+            return []
+        voices = []
+        for onnx in sorted(d.glob("*.onnx")):
+            name = onnx.name[: -len(".onnx")]
+            meta = self._piper_voice_meta(onnx)
+            voices.append({
+                "name": name,
+                "language": meta.get("language") or name,
+                "locale": meta.get("locale", ""),
+                "quality": meta.get("quality", ""),
+                "sample_rate": meta.get("sample_rate"),
+            })
+        return voices
+
+    def _synthesize_piper(self, text: str, voice: str, speed: float) -> Optional[bytes]:
+        pv = self._get_piper_voice(voice)
+        if pv is None:
+            logger.warning(
+                f"Piper voice {voice!r} not found in {self._piper_voice_dir()} "
+                f"— pick another voice in settings or add one to the cache"
+            )
+            return None
+        try:
+            # tts_speed 2.0 means "twice as fast" -> halve the length scale.
+            # At 1.0 skip the config entirely (Piper's voice defaults).
+            cfg = None
+            if speed != 1.0:
+                from piper.config import SynthesisConfig
+                cfg = SynthesisConfig(
+                    length_scale=1.0 / speed if speed > 0 else 1.0,
+                )
+            frames = b"".join(
+                chunk.audio_int16_bytes
+                for chunk in pv.synthesize(text, syn_config=cfg)
+            )
+            if not frames:
+                return None
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(pv.config.sample_rate)
+                wf.writeframes(frames)
+            return buf.getvalue()
+        except Exception as e:
+            logger.error(f"Piper synthesis failed: {e}", exc_info=True)
+            return None
+
     # ── API endpoint ──
 
     def _synthesize_api(self, text: str, endpoint_id: str, model: str, voice: str, speed: float = 1.0) -> Optional[bytes]:
@@ -196,13 +308,19 @@ class TTSService:
 
     # ── Public interface ──
 
-    def synthesize(self, text: str, use_cache: bool = True) -> Optional[bytes]:
+    def synthesize(self, text: str, use_cache: bool = True,
+                   voice: Optional[str] = None) -> Optional[bytes]:
         settings = self._load_settings()
         if settings.get("tts_enabled") is False:
             return None
         provider = settings["tts_provider"]
         model = settings["tts_model"]
-        voice = settings["tts_voice"]
+        # Voice override: lets the settings UI audition a voice that is not
+        # yet the saved default without writing settings.
+        if voice:
+            voice = str(voice)
+        else:
+            voice = settings["tts_voice"]
         speed = _safe_speed(settings.get("tts_speed", "1"))
 
         if provider in ("disabled", "browser"):
@@ -227,6 +345,8 @@ class TTSService:
             else:
                 logger.warning("Kokoro TTS not available")
                 return None
+        elif provider == "piper":
+            audio_data = self._synthesize_piper(text, voice, speed)
         elif provider.startswith("endpoint:"):
             endpoint_id = provider.split(":", 1)[1]
             audio_data = self._synthesize_api(text, endpoint_id, model, voice, speed)
@@ -240,9 +360,9 @@ class TTSService:
 
         return audio_data
 
-    def synthesize_to_base64(self, text: str) -> Optional[str]:
+    def synthesize_to_base64(self, text: str, voice: Optional[str] = None) -> Optional[str]:
         import base64
-        audio = self.synthesize(text)
+        audio = self.synthesize(text, voice=voice)
         if audio:
             return base64.b64encode(audio).decode("utf-8")
         return None
@@ -273,6 +393,8 @@ class TTSService:
         if provider == "local":
             kokoro = self._get_kokoro()
             stats["model"] = "Kokoro-82M (GPU)" if (kokoro and kokoro.available) else "Kokoro (not loaded)"
+        elif provider == "piper":
+            stats["model"] = "Piper (CPU)"
         elif provider == "browser":
             stats["model"] = "Browser (Web Speech API)"
         elif provider.startswith("endpoint:"):

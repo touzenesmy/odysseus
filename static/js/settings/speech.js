@@ -18,17 +18,24 @@ export async function initTtsSettings() {
   var speedRow = el('set-ttsSpeedRow');
   var ttsMsg = el('set-ttsSettingsMsg');
   var ttsEnabledToggle = el('set-ttsEnabledToggle');
+  var piperVoiceSelect = el('set-ttsPiperVoiceSelect');
+  var piperVoiceRow = el('set-ttsPiperVoiceRow');
+  var piperAuditionBtn = el('set-ttsPiperAuditionBtn');
   var ttsConfigWrap = provSel ? provSel.closest('div[style*="flex-direction"]') : null;
 
   function isEndpoint() { return provSel.value.startsWith('endpoint:'); }
   function getModel() { return isEndpoint() ? modelSelect.value : modelInput.value; }
-  function getVoice() { return isEndpoint() ? voiceSelect.value : voiceInput.value; }
+  function getVoice() {
+    if (provSel.value === 'piper') return piperVoiceSelect ? piperVoiceSelect.value : '';
+    return isEndpoint() ? voiceSelect.value : voiceInput.value;
+  }
 
   function updateVisibility() {
     var prov = provSel.value;
     modelRow.style.display = prov.startsWith('endpoint:') ? 'flex' : 'none';
-    voiceRow.style.display = prov === 'disabled' ? 'none' : 'flex';
+    voiceRow.style.display = (prov === 'disabled' || prov === 'piper') ? 'none' : 'flex';
     speedRow.style.display = prov === 'disabled' ? 'none' : 'flex';
+    if (piperVoiceRow) piperVoiceRow.style.display = prov === 'piper' ? 'flex' : 'none';
     if (isEndpoint()) {
       modelSelect.style.display = ''; modelInput.style.display = 'none';
       voiceSelect.style.display = ''; voiceInput.style.display = 'none';
@@ -36,6 +43,29 @@ export async function initTtsSettings() {
       modelSelect.style.display = 'none'; modelInput.style.display = '';
       voiceSelect.style.display = 'none'; voiceInput.style.display = prov === 'disabled' ? 'none' : '';
     }
+  }
+
+  async function loadPiperVoices() {
+    if (!piperVoiceSelect) return;
+    try {
+      var res = await fetch('/api/tts/voices', { credentials: 'same-origin' });
+      var data = await res.json();
+      var voices = data.voices || [];
+      piperVoiceSelect.innerHTML = '';
+      voices.forEach(function(v) {
+        var opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = v.name + (v.language ? ' \u2014 ' + v.language : '');
+        piperVoiceSelect.appendChild(opt);
+      });
+      var saved = (settings && settings.tts_voice) || '';
+      if (saved && voices.some(function(v) { return v.name === saved; })) {
+        piperVoiceSelect.value = saved;
+      } else if (voices.length) {
+        piperVoiceSelect.value = voices[0].name;
+      }
+      piperVoiceSelect.disabled = !voices.length;
+    } catch (e) { console.warn('Failed to load Piper voices', e); }
   }
 
   var ttsKeywords = ['tts', 'audio'];
@@ -68,6 +98,7 @@ export async function initTtsSettings() {
   }
   syncTtsDisabled();
   updateVisibility();
+  if (provSel && provSel.value === 'piper') loadPiperVoices();
 
   async function saveTTS() {
     try {
@@ -82,10 +113,11 @@ export async function initTtsSettings() {
     fetch('/api/tts/clear-cache', { method: 'POST', credentials: 'same-origin' }).catch(function(){});
   }
 
-  provSel.addEventListener('change', function() {
+  provSel.addEventListener('change', async function() {
     var prov = provSel.value;
     if (prov === 'local') voiceInput.value = 'af_heart';
     else if (isEndpoint()) { voiceSelect.value = 'alloy'; modelSelect.value = 'tts-1'; }
+    else if (prov === 'piper') { await loadPiperVoices(); }
     else if (prov === 'browser') { voiceInput.value = ''; voiceInput.placeholder = 'OS default voice'; }
     updateVisibility();
     saveTTS();
@@ -95,7 +127,45 @@ export async function initTtsSettings() {
   voiceSelect.addEventListener('change', saveAndClearCache);
   voiceInput.addEventListener('change', saveTTS);
   speedSelect.addEventListener('change', saveAndClearCache);
+  if (piperVoiceSelect) piperVoiceSelect.addEventListener('change', saveAndClearCache);
   if (ttsEnabledToggle) ttsEnabledToggle.addEventListener('change', function() { syncTtsDisabled(); saveTTS(); });
+
+  // Piper voice audition — synthesizes a fixed sentence with the selected
+  // voice via the voice override (settings are not written).
+  if (piperAuditionBtn) {
+    var auditionAudio = null;
+    piperAuditionBtn.addEventListener('click', async function() {
+      var name = piperVoiceSelect ? piperVoiceSelect.value : '';
+      if (!name) {
+        ttsMsg.textContent = 'No Piper voice cached'; ttsMsg.style.color = 'var(--red, #e55)';
+        setTimeout(function() { ttsMsg.textContent = ''; }, 2000); return;
+      }
+      try {
+        if (auditionAudio) { auditionAudio.pause(); auditionAudio = null; }
+        var res = await fetch('/api/tts/synthesize', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: 'Hello, this is how I sound. I live on your server and speak at conversation speed.',
+            format: 'audio', voice: name
+          })
+        });
+        if (!res.ok) {
+          var err = await res.json().catch(function() { return {}; });
+          throw new Error(err.detail?.message || 'Synthesis failed');
+        }
+        var blob = await res.blob();
+        var url = URL.createObjectURL(blob);
+        auditionAudio = new Audio(url);
+        auditionAudio.onended = function() { URL.revokeObjectURL(url); auditionAudio = null; };
+        auditionAudio.onerror = function() { URL.revokeObjectURL(url); auditionAudio = null; };
+        await auditionAudio.play().catch(function(e) { throw new Error('Playback failed: ' + e.message); });
+      } catch (e) {
+        ttsMsg.textContent = 'Audition failed: ' + e.message; ttsMsg.style.color = 'var(--red, #e55)';
+        setTimeout(function() { ttsMsg.textContent = ''; }, 2500);
+      }
+    });
+  }
 
   // Preview / test button
   var previewBtn = el('set-ttsPreviewBtn');
@@ -137,10 +207,12 @@ export async function initTtsSettings() {
             window.speechSynthesis.speak(utt);
           });
         } else {
+          var previewBody = { text: testText, format: 'audio' };
+          if (prov === 'piper' && piperVoiceSelect) previewBody.voice = piperVoiceSelect.value;
           var res = await fetch('/api/tts/synthesize', {
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: testText, format: 'audio' })
+            body: JSON.stringify(previewBody)
           });
           if (!res.ok) { var err = await res.json().catch(function() { return {}; }); throw new Error(err.detail?.message || 'Synthesis failed'); }
           var blob = await res.blob();
