@@ -1,6 +1,6 @@
 # Speech
 
-Last updated: dev@3b6c1691 | 2026-09-16
+Last updated: dev@3b6c1691 + fork voice-mode Phase 1-2 | 2026-09-16
 
 ## Scope
 
@@ -9,17 +9,19 @@ This spec covers speech behavior in:
 - app service initialization and route registration in `app.py`;
 - `services/stt/stt_service.py`;
 - `services/tts/tts_service.py`;
+- `services/vad/silero_vad.py`;
 - `routes/stt_routes.py`;
 - `routes/tts_routes.py`;
+- `routes/voice_routes.py`;
 - `src/upload_limits.py`;
 - settings defaults/cache in `src/settings.py`;
 - settings routes in `routes/auth_routes.py`;
 - model endpoint cleanup in `routes/model_routes.py`;
 - settings/tool aliases in `src/tool_implementations.py`;
-- frontend modules `static/js/voiceRecorder.js`, `static/js/tts-ai.js`, `static/app.js`, `static/js/chat.js`, `static/js/slashCommands.js`, `static/js/keyboard-shortcuts.js`, `static/js/settings.js`, and `static/index.html`;
+- frontend modules `static/js/voiceRecorder.js`, `static/js/tts-ai.js`, `static/js/voiceMode.js`, `static/js/pcm16-processor.js`, `static/app.js`, `static/js/chat.js`, `static/js/slashCommands.js`, `static/js/keyboard-shortcuts.js`, `static/js/settings.js`, and `static/index.html`;
 - optional dependency declarations in `requirements-optional.txt`;
 - runtime cache path `data/tts_cache/`;
-- tests covering speech service toggles, TTS speed/cache, STT temp cleanup, upload limits, settings scrubbing, and model endpoint cleanup.
+- tests covering speech service toggles, TTS speed/cache, STT temp cleanup, upload limits, settings scrubbing, model endpoint cleanup, and voice mode (VAD engine, WebSocket contract, decimator math).
 
 ## Current Call Sites Include
 
@@ -92,11 +94,30 @@ Route behavior:
 - malformed or nonpositive `tts_speed` falls back to `1.0`;
 - provider unavailable returns 503; failed synthesis/transcription generally returns route-level failure.
 
+## Voice Mode (hands-free dictation)
+
+Voice mode is the hands-free dictation edge, added 2026-09-16 (fork, Phase 2 of the voice-mode feature). While the composer's voice-mode toggle is ON, `static/js/voiceMode.js` captures the mic through an AudioWorklet decimator (`static/js/pcm16-processor.js`, device rate → 16 kHz PCM16, fixed 20 ms frames) and streams it to `routes/voice_routes.py`. The server runs Silero v6 VAD (`services/vad/silero_vad.py`, model bundled inside `faster_whisper` assets — no extra download) and, per completed utterance, the configured STT provider; transcripts go back to the browser, which appends them to the chat composer. **The LLM conversation stays on `/api/chat_stream`** — this WebSocket is an audio edge, not a conversation engine: no session, history, or LLM state lives there. Phase 3 (auto-send + sentence-streamed TTS playback with barge-in) builds on this; until then transcripts are never sent automatically.
+
+Endpoints (`routes/voice_routes.py`, registered in `app.py` with the shared `stt_service`):
+
+- `WS /api/voice/stream` — the audio edge. Protocol: client sends binary PCM16 LE 16 kHz mono frames (any size; the server reslices into 32 ms VAD windows) and optional JSON control frames; the server sends `{"status":"ready"}` on connect, `{"vad":"start"}` / `{"stt":"start"}` state pulses, and `{"transcript":str,"stt_ms":int,"audio_ms":int,"reason":str}` per utterance, or `{"error":{"code","message"}}`. Close codes: 4401 unauthenticated, 4001 voice mode disabled, 4002 no STT provider available. STT runs off the event loop (`asyncio.to_thread`); a receive timeout (0.5 s) plus a 1 s quiet gap flushes any in-flight utterance instead of waiting for a silence tail that will never arrive (tab suspended, mic cut).
+- `GET /api/voice/status` — the UI gate: `voice_mode_enabled`, STT availability/provider, and the current `vad_silence_ms`.
+
+Auth: the app's HTTP `AuthMiddleware` is a `BaseHTTPMiddleware` and **cannot see WebSocket scopes**, so the WS handler validates the session cookie itself against `app.state.auth_manager` (the same cookie the middleware checks); auth-disabled deployments pass through.
+
+VAD engine (`services/vad/silero_vad.py`): stateful Silero v6 wrapper (RNN `h`/`c` + 4 ms context), fed in exact 512-sample (32 ms) windows; `feed()` accepts arbitrary chunk sizes and returns events in order. State machine follows the Silero reference: a candidate end latches on the FIRST silence window and the utterance stops once `min_silence_ms` have elapsed since it; any speech window cancels the candidate. Defaults: 500 ms silence tail (conversational; the reference's 2000 ms is batch-oriented), 250 ms minimum utterance, 300 ms pre-roll kept via a 500 ms ring buffer, 60 s force-split. Blip-dropping measures **content** length (first speech window → end), not the pre-roll-inclusive buffer. `flush()` emits an in-flight utterance with `reason="flush"`; `detect_speech()` is the batch helper. Settings: `vad_silence_ms`, `vad_min_speech_ms` (thresholds are constants, not settings).
+
+Settings (`src/settings.py`): `voice_mode_enabled` (default `false` — OFF means the WS refuses the connection and the composer toggle stays hidden; zero behavior change), `vad_silence_ms` (500), `vad_min_speech_ms` (250). The UI lives in the restored STT card in `static/index.html` (the STT settings card had been removed upstream and came back with voice mode): provider/model/language rows plus a Voice Mode section with the enable toggle, a microphone test (1.5 s level check), and the silence-to-stop slider. The composer toggle (`#voice-mode-btn`) appears only when `/api/voice/status` reports enabled + STT available.
+
+Degraded behavior: missing `onnxruntime`/faster-whisper assets degrade the VAD (and with it voice mode) to unavailable rather than crashing the route; missing mic/secure context is handled client-side with toasts. On a shared-GPU box, a CUDA OOM while loading the Whisper model now falls back to CPU int8 (`services/stt/stt_service.py`) instead of leaving local STT dead.
+
+Tests: `tests/test_voice_mode.py` (VAD engine on a real TTS-generated fixture in `tests/fixtures/voice_mode_speech.wav`: splitting, pre-roll, streaming-vs-batch, irregular frames, blips, pure silence, wav decodability; WS contract with a stub STT: gates, round-trip, gap-flush, silence-only, cookie auth; settings defaults + persistence round-trip; the CUDA→CPU fallback) plus node-based client checks under `tests/helpers/` (`check_client_js.mjs` loads `voiceMode.js` under a DOM shim; `check_pcm_processor.mjs` verifies the decimator's DC gain, 440 Hz pass, 10 kHz stopband, and frame cadence).
+
 ## Settings, Endpoints, And Cache
 
 Speech providers are global settings under `data/settings.json`, with defaults in `src/settings.py`. Settings reads are scrubbed for non-admin callers, writes are admin-only, and `manage_settings` can change non-secret speech settings through aliases.
 
-Visible UI state is not complete: backend and JS speech settings exist, and the STT settings JS exits when its removed DOM nodes are absent. The TTS settings card was restored 2026-09-16 (it had been hidden in the DOM): it shows Provider (disabled/browser/local/piper/endpoint), a Piper voice dropdown fed by `GET /api/tts/voices` with an Audition button (fixed sentence, voice override, no settings write), and the existing Preview button honors the selected Piper voice.
+Visible UI state is not complete: backend and JS speech settings exist, and the STT settings JS exits when its removed DOM nodes are absent. Both speech settings cards were restored 2026-09-16 (they had been hidden/removed in the DOM). The TTS card shows Provider (disabled/browser/local/piper/endpoint), a Piper voice dropdown fed by `GET /api/tts/voices` with an Audition button (fixed sentence, voice override, no settings write), and the existing Preview button honors the selected Piper voice. The STT card (restored with voice mode) shows Provider/Model/Language plus the Voice Mode section (enable toggle, microphone test, silence-to-stop slider).
 
 `routes.model_routes` clears `tts_provider` and `stt_provider` references when a referenced model endpoint is deleted.
 
@@ -134,7 +155,7 @@ TTS cached audio can contain sensitive assistant text rendered as speech. The ca
 
 ## Testing Coverage
 
-Existing coverage includes speech service toggles, malformed/non-string TTS provider and speed handling, cache stats plus configured eviction/disable/file filtering/error handling, STT temp cleanup, direct upload limits, model routes, settings scrubbing, and the Piper provider (tests/test_tts_piper_provider.py: availability, voice-name sanitization, voice listing with/without sidecars, synthesis + cache keys + speed mapping, `/api/tts/voices` and the voice-override route contract).
+Existing coverage includes speech service toggles, malformed/non-string TTS provider and speed handling, cache stats plus configured eviction/disable/file filtering/error handling, STT temp cleanup, direct upload limits, model routes, settings scrubbing, and the Piper provider (tests/test_tts_piper_provider.py: availability, voice-name sanitization, voice listing with/without sidecars, synthesis + cache keys + speed mapping, `/api/tts/voices` and the voice-override route contract). Voice mode is covered by tests/test_voice_mode.py (VAD engine, WebSocket contract incl. gap-flush and cookie auth, settings persistence, CUDA→CPU fallback) and node decimator checks under tests/helpers/.
 
 Missing coverage includes route-level STT/TTS success and failure shapes, auth/API-token behavior, endpoint owner isolation, STT type/magic rejection, TTS request-size/no-store/cache privacy behavior, degraded optional dependency paths, and frontend recorder/TTS fallback states.
 
