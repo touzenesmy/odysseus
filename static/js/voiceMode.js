@@ -154,6 +154,7 @@ class VoiceModeModule {
     } else if (data.vad === 'start') {
       this.listening = true;
       this._updateBtn();
+      this._bargeIn();  // real speech onset → silence the assistant NOW
     } else if (data.stt === 'start') {
       this.transcribing = true;
       this._updateBtn();
@@ -183,17 +184,30 @@ class VoiceModeModule {
     return m && m.getCurrentSessionId ? m.getCurrentSessionId() : null;
   }
 
+  _bargeIn() {
+    // Fired on every VAD speech onset — including the ones that end up as
+    // noise blips (dropped at the silence tail). That is the point: silence
+    // the assistant the instant the user starts talking, without waiting
+    // for the transcript (which arrives 0.5–2 s later).
+    const tts = window.aiTTSManager;
+    if (tts && (tts.isPlaying || tts._processing)) tts.stop();
+    const cm = window.chatModule;
+    const sid = this._sid();
+    if (cm && cm.hasActiveStream && sid && cm.hasActiveStream(sid)) {
+      cm.abortCurrentRequest(true);  // Stop-button path (idempotent)
+    }
+  }
+
   _onTranscript(text) {
     // Phase 3 — the full loop. A completed utterance either barges in on a
     // spoken reply or is sent straight into the normal chat pipeline.
     const cm = window.chatModule;
-    const tts = window.aiTTSManager;
     const busy = (sid) => !!(cm && cm.hasActiveStream && sid && cm.hasActiveStream(sid));
-    if (tts && (tts.isPlaying || tts._processing)) {
-      // Barge-in: the user spoke while the assistant was talking.
-      tts.stop();
-      if (busy(this._sid())) cm.abortCurrentRequest(true);  // Stop-button path
-    }
+    // Barge-in already happened at the VAD speech onset (_onMessage). The
+    // transcript can still arrive while TTS is audible (the VAD tail + STT
+    // outlive the stop) — stop again, idempotently, before it is queued.
+    const tts = window.aiTTSManager;
+    if (tts && (tts.isPlaying || tts._processing)) tts.stop();
     if (!this.autoSend || !cm || !cm.handleChatSubmit) {
       this._insertTranscript(text);
       return;
