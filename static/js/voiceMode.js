@@ -54,13 +54,16 @@ class VoiceModeModule {
 
   async start() {
     if (this.active) { this.stop(); return; }
-    if (this._ws) { return; }  // already starting (ws not open yet)
+    if (this._starting) { return; }  // a start() is already in flight (getUserMedia / ws open)
+    this._starting = true;
     if (!window.isSecureContext) {
       showToast('Voice mode needs HTTPS (or localhost) for the microphone');
+      this._starting = false;
       return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showToast('Microphone not supported in this browser');
+      this._starting = false;
       return;
     }
     try {
@@ -70,6 +73,7 @@ class VoiceModeModule {
     } catch (e) {
       if (e.name === 'NotAllowedError') showToast('Microphone access denied');
       else showToast('Microphone error: ' + e.message);
+      this._starting = false;
       return;
     }
 
@@ -94,6 +98,7 @@ class VoiceModeModule {
       ws.binaryType = 'arraybuffer';
       ws.onopen = () => {
         this._ws = ws;
+        this._starting = false;
         this.listening = this.active;
         this._updateBtn();
         // Flush frames captured while the socket was opening.
@@ -122,6 +127,7 @@ class VoiceModeModule {
 
   _teardown() {
     this.active = false;
+    this._starting = false;
     this.listening = false;
     this.transcribing = false;
     this._pending = [];

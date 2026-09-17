@@ -31,9 +31,22 @@ globalThis.document = {
 globalThis.window = globalThis;
 globalThis.location = { protocol: 'http:', host: 'localhost:8000' };
 globalThis.fetch = async () => { throw new Error('no fetch in shim'); };
-globalThis.WebSocket = class { readyState = 0; } ;
-globalThis.AudioWorkletNode = class {};
-globalThis.AudioContext = class {};
+globalThis.WebSocket = class { readyState = 0; };
+class FakeAudioNode {
+  constructor() { this.port = { postMessage() {} }; this.gain = { value: 0 }; }
+  connect() { return this; }
+  disconnect() {}
+}
+globalThis.AudioWorkletNode = class FakeAW extends FakeAudioNode {};
+globalThis.AudioContext = class {
+  constructor() {
+    this.audioWorklet = { addModule: async () => {} };
+    this.destination = {};
+  }
+  createMediaStreamSource() { return new FakeAudioNode(); }
+  createGain() { return new FakeAudioNode(); }
+  close() {}
+};
 globalThis.isSecureContext = false;
 globalThis.addEventListener = () => {}; // window shim (voiceMode.js binds beforeunload)
 
@@ -145,6 +158,91 @@ if (t5 !== 'Preamble')
   throw new Error('time-attributed unclosed leak: ' + JSON.stringify(t5));
 
 console.log('tts thinking-strip OK');
+
+// ── TTS: client cache is capped (entries are audio blobs, not strings) ──
+{
+  const m = new ttsMod.AITTSManager();
+  m.available = true;
+  m._provider = 'piper';
+  const revoked = [];
+  const oldUrl = globalThis.URL;
+  const oldFetch = globalThis.fetch;
+  globalThis.URL = { createObjectURL: () => 'blob:u' + Math.random().toString(36).slice(2),
+                    revokeObjectURL: (u) => revoked.push(u) };
+  // stats-shaped for the constructor's checkAvailability (so it can't clobber
+  // `available` back to false mid-loop), blob-shaped for synthesize
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ available: true, ready: true, provider: 'piper', speed: 1 }),
+    blob: async () => 'b',
+  });
+  try {
+    for (let i = 0; i < 40; i++) {
+      await m.synthesize('sentence number ' + i + ' that is definitely long enough');
+    }
+  } finally {
+    globalThis.URL = oldUrl;
+    globalThis.fetch = oldFetch;
+  }
+  if (m.cache.size > 32)
+    throw new Error('client TTS cache unbounded: ' + m.cache.size);
+  if (revoked.length !== 40 - m.cache.size)
+    throw new Error('cache eviction did not revoke URLs: revoked=' + revoked.length);
+}
+console.log('tts cache-cap OK');
+
+// ── Voice mode: a double start() must not double-capture the mic ──
+// The stub ws opens synchronously, so the happy path completes: _ws set,
+// _starting cleared, and a second click is guarded by _ws.
+{
+  if (!('navigator' in globalThis)) {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { mediaDevices: {} },
+    });
+  }
+  const origWS = globalThis.WebSocket;
+  globalThis.WebSocket = class {
+    constructor(url) { this.readyState = 1; if (this.onopen) this.onopen(); }
+    static get OPEN() { return 1; }
+    close() {}
+    send() {}
+  };
+  const streamCount = { n: 0 };
+  const vm = globalThis.voiceModeModule;
+  const wasSecure = globalThis.isSecureContext;
+  globalThis.isSecureContext = true;  // the shim defaults to false (http://localhost)
+  navigator.mediaDevices.getUserMedia = async () => { streamCount.n++; return { getTracks: () => [] }; };
+  vm._ws = null;
+  vm._starting = false;
+  const p1 = vm.start();
+  // Second click while the first is still in flight (before its ws exists).
+  vm.start();
+  await p1;
+  if (streamCount.n !== 1)
+    throw new Error('double start() captured the mic twice: ' + streamCount.n);
+  vm._teardown();
+  globalThis.WebSocket = origWS;
+  globalThis.isSecureContext = wasSecure;
+}
+console.log('voiceMode double-start OK');
+
+// mic-denied path must leave the module startable again
+{
+  const wasSecure = globalThis.isSecureContext;
+  globalThis.isSecureContext = true;
+  navigator.mediaDevices.getUserMedia = async () => {
+    const e = new Error('denied'); e.name = 'NotAllowedError'; throw e;
+  };
+  const vm = globalThis.voiceModeModule;
+  vm._ws = null;
+  vm._starting = false;
+  await vm.start();
+  globalThis.isSecureContext = wasSecure;
+  if (vm._starting)
+    throw new Error('mic-denied path left _starting set');
+}
+console.log('voiceMode denied-reset OK');
 
 // ── TTS: streaming end-flush must never re-speak thinking or prior rounds ──
 const settle = () => new Promise((r) => setTimeout(r, 250));
