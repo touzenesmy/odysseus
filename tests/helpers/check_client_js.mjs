@@ -133,4 +133,74 @@ let t3 = mgr.extractPlainText('<thinking>working through it...</thinking>**Done*
 if (!t3.includes('Done') || t3.includes('thinking...'))
   throw new Error('mixed strip wrong: ' + JSON.stringify(t3));
 
+// the app rewrites the tag to <think time="12.3"> when thinking finalizes —
+// the bare-tag strip let that block (reasoning included) reach the synthesizer
+let t4 = mgr.extractPlainText('<think time="12.3">I need to figure out the answer carefully.</think>All good.');
+if (t4 !== 'All good.')
+  throw new Error('time-attributed thinking leak: ' + JSON.stringify(t4));
+
+// same, unclosed
+let t5 = mgr.extractPlainText('Preamble <think time="1.0">still reasoning about it...');
+if (t5 !== 'Preamble')
+  throw new Error('time-attributed unclosed leak: ' + JSON.stringify(t5));
+
 console.log('tts thinking-strip OK');
+
+// ── TTS: streaming end-flush must never re-speak thinking or prior rounds ──
+const settle = () => new Promise((r) => setTimeout(r, 250));
+
+function makeSpeaker() {
+  const m = new ttsMod.AITTSManager();
+  m.available = true;
+  m.autoPlay = true;
+  m._provider = 'piper';
+  const enqueued = [];
+  m.enqueue = (text) => { enqueued.push(text); };
+  return { m, enqueued };
+}
+
+// end-to-end: chat.js feeds reply-only text while streaming, then flushes the
+// raw accumulated (thinking tag rewritten with a time attribute)
+{
+  const { m, enqueued } = makeSpeaker();
+  const reply = 'Here is the summary you asked for. The tunnel is up and running.';
+  const accumulated = '<think time="12.3">I need to figure out what to answer about the tunnel status and topology.</think>' + reply;
+  m.streamingStart();
+  m.streamingUpdate(reply);
+  await settle();
+  m.streamingEnd(accumulated);
+  const all = enqueued.join(' | ');
+  if (all.includes('figure out'))
+    throw new Error('end-flush spoke thinking: ' + JSON.stringify(all));
+  if (!all.includes('tunnel is up'))
+    throw new Error('end-flush dropped reply: ' + JSON.stringify(all));
+}
+
+// multi-round: chat.js flushes each round at agent_step (streamingFlushRound)
+// and ends with the last round's text; each round's reply must be spoken
+// exactly once
+{
+  const { m, enqueued } = makeSpeaker();
+  const r1 = 'First round answer with enough length here.';
+  const r2 = 'Second round answer with enough length here.';
+  m.streamingStart();
+  m.streamingUpdate(r1);
+  await settle();
+  m.streamingFlushRound(r1); // chat.js calls this at agent_step
+  m.streamingUpdate(r2);
+  await settle();
+  const before = enqueued.length;
+  m.streamingEnd(r2);
+  const flushed = enqueued.slice(before).join(' | ');
+  if (flushed.includes('First round'))
+    throw new Error('end-flush re-spoke round 1: ' + JSON.stringify(flushed));
+  const total = enqueued.join(' | ');
+  if (total.split('First round').length - 1 !== 1)
+    throw new Error('round 1 count wrong: ' + JSON.stringify(enqueued));
+  if (total.split('Second round').length - 1 !== 1)
+    throw new Error('round 2 count wrong: ' + JSON.stringify(enqueued));
+  if (total.includes('think'))
+    throw new Error('flush spoke thinking: ' + JSON.stringify(total));
+}
+
+console.log('tts streaming-flush OK');
