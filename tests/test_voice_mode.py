@@ -347,6 +347,7 @@ def test_ws_rejects_browser_provider(voice_app):
 def test_settings_defaults_inert():
     from src.settings import DEFAULT_SETTINGS
     assert DEFAULT_SETTINGS["voice_mode_enabled"] is False
+    assert DEFAULT_SETTINGS["voice_auto_send"] is True
     assert DEFAULT_SETTINGS["stt_enabled"] is False
     assert DEFAULT_SETTINGS["vad_silence_ms"] == 500
     assert DEFAULT_SETTINGS["vad_min_speech_ms"] == 250
@@ -378,12 +379,15 @@ def test_settings_save_roundtrip_voice_keys(tmp_path, monkeypatch):
     client = TestClient(app)
     r = client.post("/api/auth/settings",
                     json={"voice_mode_enabled": True,
-                          "vad_silence_ms": 600},
+                          "vad_silence_ms": 600,
+                          "voice_auto_send": False},
                     cookies={"odysseus_session": "t"})
     assert r.status_code == 200
     assert r.json()["voice_mode_enabled"] is True
     assert stored["voice_mode_enabled"] is True
     assert stored["vad_silence_ms"] == 600
+    assert r.json()["voice_auto_send"] is False
+    assert stored["voice_auto_send"] is False
 
 
 # ── STT CUDA-OOM → CPU fallback ──

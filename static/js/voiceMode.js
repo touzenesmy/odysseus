@@ -16,6 +16,7 @@ class VoiceModeModule {
   constructor() {
     this.available = false;          // server says voice mode is usable
     this.sttProvider = 'disabled';
+    this.autoSend = false;          // voice_auto_send setting (Phase 3)
     this.active = false;             // user turned voice mode on
     this.listening = false;          // ws open + streaming (UI pulse)
     this.transcribing = false;       // an utterance is in STT (UI state)
@@ -36,10 +37,11 @@ class VoiceModeModule {
       const s = await res.json();
       this.available = !!(s.enabled && s.stt_available);
       this.sttProvider = s.stt_provider || 'disabled';
+      this.autoSend = s.auto_send !== false;
       if (this._btn) {
         this._btn.style.display = this.available ? '' : 'none';
         this._btn.title = this.available
-          ? 'Voice mode — dictation into the composer'
+          ? 'Voice mode — ' + (this.autoSend ? 'what you say is sent to the assistant' : 'dictation into the composer')
           : 'Voice mode (disabled)';
       }
     } catch (e) {
@@ -158,10 +160,8 @@ class VoiceModeModule {
     } else if (typeof data.transcript === 'string') {
       this.transcribing = false;
       this._updateBtn();
-      if (data.transcript) this._insertTranscript(data.transcript);
-      else if (data.stt_ms != null) {
-        // Empty transcript = the VAD segment was noise; stay quiet.
-      }
+      if (data.transcript) this._onTranscript(data.transcript);
+      // Empty transcript = the VAD segment was noise; stay quiet.
     } else if (data.error) {
       showToast('Voice mode: ' + data.error.message, 5000);
       this._teardown();
@@ -176,6 +176,47 @@ class VoiceModeModule {
                   4401: 'Not authenticated' }[ev.code];
     showToast('Voice mode stopped' + (msg ? ': ' + msg : ''), 4000);
     this._teardown();
+  }
+
+  _sid() {
+    const m = window.sessionModule;
+    return m && m.getCurrentSessionId ? m.getCurrentSessionId() : null;
+  }
+
+  _onTranscript(text) {
+    // Phase 3 — the full loop. A completed utterance either barges in on a
+    // spoken reply or is sent straight into the normal chat pipeline.
+    const cm = window.chatModule;
+    const tts = window.aiTTSManager;
+    const busy = (sid) => !!(cm && cm.hasActiveStream && sid && cm.hasActiveStream(sid));
+    if (tts && (tts.isPlaying || tts._processing)) {
+      // Barge-in: the user spoke while the assistant was talking.
+      tts.stop();
+      if (busy(this._sid())) cm.abortCurrentRequest(true);  // Stop-button path
+    }
+    if (!this.autoSend || !cm || !cm.handleChatSubmit) {
+      this._insertTranscript(text);
+      return;
+    }
+    const input = document.getElementById('message');
+    if (!input) { this._insertTranscript(text); return; }
+    if (input.value.trim()) {
+      // The user is typing — don't take the wheel, just append (Phase 2).
+      this._insertTranscript(text);
+      return;
+    }
+    if (busy(this._sid())) {
+      // A turn is in flight (we just aborted it, or the stream outlived the
+      // TTS): queue it — chat.js drains the queue the moment the stream ends.
+      cm.send(text);
+    } else {
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      setTimeout(() => {
+        cm.handleChatSubmit({ preventDefault() {} })
+          .catch(err => console.error('voice auto-send failed', err));
+      }, 0);
+    }
   }
 
   _insertTranscript(text) {
