@@ -100,8 +100,7 @@ class VadConfig:
     def __post_init__(self):
         if self.min_silence_ms < 50:
             self.min_silence_ms = 50
-        if self.min_speech_ms < 0:
-            self.min_speech_ms = 0
+
 
 
 class SileroVAD:
@@ -270,13 +269,11 @@ class SileroVAD:
         """Cut the current utterance at ``end_idx`` (content end)."""
         cfg = self.cfg
         end_idx = min(end_idx, self._buf_end_idx)
-        n = end_idx - self._buf_start_idx
-        pcm = bytes(self._buf[: max(0, n * 2)])
+        pcm = bytes(self._buf[: max(0, (end_idx - self._buf_start_idx) * 2)])
         duration_s = len(pcm) // 2 / SAMPLE_RATE
         # Blip check on CONTENT length (trigger → end), not the buffered
         # length: the buffer carries up to speech_pad_ms of pre-roll.
-        content_s = max(0.0, (min(end_idx, self._buf_end_idx)
-                              - self._trigger_idx) / SAMPLE_RATE)
+        content_s = max(0.0, (end_idx - self._trigger_idx) / SAMPLE_RATE)
         self._in_speech = False
         self._buf = bytearray()
         self._buf_full = False
