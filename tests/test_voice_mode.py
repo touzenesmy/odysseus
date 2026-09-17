@@ -150,6 +150,20 @@ class _NoAuthManager:
         return token == "good-token"
 
 
+class _SlowStatsSTT:
+    """get_stats would block on a real model load — the status endpoint
+    must not touch it (regression: event-loop stall on every page load)."""
+    available = True
+
+    def get_stats(self):
+        import time
+        time.sleep(1.0)
+        return {"available": True, "provider": "local"}
+
+    def transcribe(self, audio: bytes, **kw):
+        return "x"
+
+
 @pytest.fixture
 def voice_app(monkeypatch):
     """Factory: (stt, voice_enabled, auth_manager) → FastAPI app with the
@@ -158,12 +172,15 @@ def voice_app(monkeypatch):
     from routes.voice_routes import setup_voice_routes
     from src import settings as S
 
-    def make(stt, voice_enabled=True, auth_manager=None):
+    def make(stt, voice_enabled=True, auth_manager=None, extra=None):
         app = FastAPI()
         app.include_router(setup_voice_routes(stt))
         app.state.auth_manager = auth_manager
+        # Mirror a configured instance: STT on with the local provider.
         base = {**S.DEFAULT_SETTINGS,
-                "voice_mode_enabled": voice_enabled}
+                "voice_mode_enabled": voice_enabled,
+                "stt_enabled": True, "stt_provider": "local",
+                **(extra or {})}
         monkeypatch.setattr(S, "load_settings", lambda: dict(base))
         monkeypatch.setattr(S, "get_setting",
                             lambda k, d=None: base.get(k, d))
@@ -299,6 +316,30 @@ def test_status_endpoint(voice_app):
     assert body["stt_available"] is True
     assert body["stt_provider"] == "local"
     assert body["vad_silence_ms"] == 500
+
+
+def test_status_is_settings_only_and_fast(voice_app):
+    import time
+    from fastapi.testclient import TestClient
+    stt = _SlowStatsSTT()
+    app = voice_app(stt, voice_enabled=True)
+    t0 = time.monotonic()
+    r = TestClient(app).get("/api/voice/status")
+    assert r.status_code == 200
+    assert r.json()["stt_available"] is True
+    # Must be settings-only: the stub's get_stats sleeps 1 s; a stall would
+    # also mean the real Whisper load (~5 s) ran on the event loop.
+    assert time.monotonic() - t0 < 0.8
+
+
+def test_ws_rejects_browser_provider(voice_app):
+    from fastapi.testclient import TestClient
+    stt = _StubSTT(available=True, provider="browser")
+    app = voice_app(stt, voice_enabled=True,
+                    extra={"stt_provider": "browser"})
+    with TestClient(app).websocket_connect("/api/voice/stream") as ws:
+        data = ws.receive_json()
+        assert data["error"]["code"] == "stt_unavailable"
 
 
 # ── settings ──

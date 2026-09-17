@@ -1120,8 +1120,9 @@ async function initSttSettings() {
           (function tick() {
             an.getFloatTimeDomainData(buf);
             for (var i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
-            if (Date.now() - t0 < 1500) requestAnimationFrame(tick);
-            else resolve();
+            if (Date.now() - t0 >= 1500) resolve();
+            else if (document.hidden) { resolve(); return; }
+            else requestAnimationFrame(tick);
           })();
         });
         ctx.close();

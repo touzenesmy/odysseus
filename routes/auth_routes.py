@@ -738,6 +738,9 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
             "agent_max_tool_calls": (0, 1000),  # 0 = unlimited
             "vision_timeout": (5, 3600),
             "vision_max_tokens": (1, 200000),
+            # Voice mode VAD knobs (routes/voice_routes.py)
+            "vad_silence_ms": (50, 3000),
+            "vad_min_speech_ms": (0, 3000),
         }
         for key in DEFAULT_SETTINGS:
             if key in RETIRED_SETTING_KEYS:

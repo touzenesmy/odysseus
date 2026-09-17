@@ -52,6 +52,7 @@ class VoiceModeModule {
 
   async start() {
     if (this.active) { this.stop(); return; }
+    if (this._ws) { return; }  // already starting (ws not open yet)
     if (!window.isSecureContext) {
       showToast('Voice mode needs HTTPS (or localhost) for the microphone');
       return;
