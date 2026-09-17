@@ -1746,6 +1746,11 @@
                     <button type="button" id="set-voiceModeTestBtn" class="admin-btn-sm" style="margin:0;padding:5px 12px;font-size:12px;">Test microphone</button>
                     <span id="set-voiceModeStatus" style="font-size:11px;color:var(--fg);"></span>
                   </div>
+                  <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <label class="settings-label" for="set-voiceAutoSend">Auto-send</label>
+                    <label class="admin-switch"><input type="checkbox" id="set-voiceAutoSend"><span class="admin-slider"></span></label>
+                    <span style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);">— what you say is sent to the assistant (and spoken back) instead of typed into the message box</span>
+                  </div>
                   <div id="set-vadRow" style="display:flex;align-items:center;gap:0.75rem;">
                     <label class="settings-label">Silence to stop</label>
                     <input id="set-vadSilenceInput" type="number" min="200" max="3000" step="50" class="settings-select" style="width:80px;padding:4px;"> ms

@@ -1026,6 +1026,14 @@ import { loadPanel } from './panels.js';
     return item;
   }
 
+  // Programmatic send for non-keyboard callers (voice mode auto-send).
+  // Busy → queue (drained by the existing queue machinery the moment the
+  // stream ends); idle → the exact composer path.
+  export function send(message) {
+    if (isStreaming || _sendInFlight) return _queueAgentRequest(message);
+    return _setComposerAndSend(message);
+  }
+
   function _setComposerAndSend(message) {
     const input = uiModule.el('message');
     if (!input) return false;
@@ -6788,6 +6796,7 @@ import { loadPanel } from './panels.js';
     addMessage: chatRenderer.addMessage,
     displayMetrics: chatRenderer.displayMetrics,
     handleChatSubmit,
+    send,
     abortCurrentRequest,
     detachCurrentStream,
     checkBackgroundStream,
