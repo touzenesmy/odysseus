@@ -8,13 +8,19 @@ import { readFileSync } from 'node:fs';
 const listeners = {};
 const elMap = {};
 function makeEl(id) {
+  let _html = '';
   return {
     id, style: {}, dataset: {},
     value: '', title: '',
+    set innerHTML(v) { _html = String(v); },
+    get innerHTML() { return _html; },
+    get textContent() { return _html.replace(/<[^>]*>/g, ''); },
+    get innerText() { return this.textContent; },
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     setAttribute() {}, getAttribute() { return null; },
     addEventListener(type, fn) { (listeners[id + ':' + type] ||= []).push(fn); },
     dispatchEvent() {}, focus() {},
+    querySelectorAll() { return []; },
   };
 }
 globalThis.document = {
@@ -96,3 +102,28 @@ if (input.value !== 'my draft appended' || events.length !== 0)
   throw new Error('append wrong: ' + JSON.stringify({ v: input.value, events }));
 
 console.log('voiceMode phase3 OK');
+
+
+// ── TTS: extractPlainText must never hand thinking to the synthesizer ──
+let ttsSrc = readFileSync(new URL('../../static/js/tts-ai.js', import.meta.url), 'utf8');
+ttsSrc = ttsSrc.replace(/import\s*\{[^}]*\}\s*from\s*'\.\/appConfig\.js';/,
+                        'const getSettings = async () => ({ tts_enabled: true });');
+const ttsMod = await import('data:text/javascript;base64,' + Buffer.from(ttsSrc).toString('base64'));
+const mgr = new ttsMod.AITTSManager();
+
+// closed thinking block: reasoning stripped, reply kept
+let t1 = mgr.extractPlainText('<thinking>I should verify this carefully. </thinking>Here is the answer: 42');
+if (!t1.includes('answer: 42') || t1.includes('I should verify'))
+  throw new Error('closed thinking leak: ' + JSON.stringify(t1));
+
+// malformed stream (never closed): everything after the tag is reasoning
+let t2 = mgr.extractPlainText('Sure! <thinking>Let me reason about this step by step. The answer should be 7.');
+if (t2 !== 'Sure!')
+  throw new Error('unclosed thinking leak: ' + JSON.stringify(t2));
+
+// reply after a closed block, plus markdown
+let t3 = mgr.extractPlainText('<thinking>working through it...</thinking>**Done** — it works.');
+if (!t3.includes('Done') || t3.includes('thinking...'))
+  throw new Error('mixed strip wrong: ' + JSON.stringify(t3));
+
+console.log('tts thinking-strip OK');

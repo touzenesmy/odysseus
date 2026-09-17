@@ -71,6 +71,13 @@ class AITTSManager {
     extractPlainText(content) {
         // Strip <think>/<thinking> blocks (model reasoning)
         let cleaned = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+        // Malformed stream (never closed): drop from the last unclosed
+        // thinking tag to the end — the rest is reasoning, not reply.
+        let openTags = cleaned.match(/<think(?:ing)?>/gi) || [];
+        let closeTags = cleaned.match(/<\/think(?:ing)?>/gi) || [];
+        if (openTags.length > closeTags.length) {
+            cleaned = cleaned.slice(0, cleaned.lastIndexOf(openTags[openTags.length - 1]));
+        }
 
         // Create a temporary div to parse HTML/markdown
         const temp = document.createElement('div');
