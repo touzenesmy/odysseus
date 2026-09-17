@@ -100,6 +100,8 @@ class VadConfig:
     def __post_init__(self):
         if self.min_silence_ms < 50:
             self.min_silence_ms = 50
+        if self.min_speech_ms < 0:
+            self.min_speech_ms = 0  # negative would let blips through
 
 
 

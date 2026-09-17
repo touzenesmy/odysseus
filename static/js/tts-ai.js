@@ -161,8 +161,14 @@ class AITTSManager {
             const audioBlob = await response.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
 
-            // Cache the result
+            // Cache the result (capped — these are audio blobs, not strings;
+            // an unbounded Map pins every reply's audio in RAM for the session).
             this.cache.set(cacheKey, audioUrl);
+            while (this.cache.size > 32) {
+                const oldest = this.cache.keys().next().value;
+                URL.revokeObjectURL(this.cache.get(oldest));
+                this.cache.delete(oldest);
+            }
 
             if (onProgress) onProgress('complete');
 
