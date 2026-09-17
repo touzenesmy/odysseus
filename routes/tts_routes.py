@@ -3,10 +3,12 @@
 TTS API routes — multi-provider (local Kokoro, API endpoint, browser).
 """
 
+import asyncio
+import logging
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -22,9 +24,10 @@ def setup_tts_routes(tts_service):
 
     @router.get("/stats")
     async def get_tts_stats():
-        """Get TTS service statistics"""
+        """Get TTS service statistics (off the loop — for 'local' this can
+        be the first Kokoro GPU-pipeline load)."""
         try:
-            return tts_service.get_stats()
+            return await asyncio.to_thread(tts_service.get_stats)
         except Exception as e:
             logger.error(f"Failed to get TTS stats: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -42,14 +45,17 @@ def setup_tts_routes(tts_service):
     async def synthesize_speech(request: TTSRequest):
         """Synthesize speech from text"""
         try:
-            if not tts_service.available:
+            # Off the event loop: synthesis is a CPU/GPU burst (Piper ~1 s,
+            # API up to the 60 s timeout) and the first call warms the model.
+            if not await asyncio.to_thread(lambda: tts_service.available):
                 raise HTTPException(
                     status_code=503,
                     detail={"message": "TTS service not available"}
                 )
             
             if request.format == "base64":
-                audio_b64 = tts_service.synthesize_to_base64(
+                audio_b64 = await asyncio.to_thread(
+                    tts_service.synthesize_to_base64,
                     request.text, voice=request.voice
                 )
                 if not audio_b64:
@@ -60,7 +66,9 @@ def setup_tts_routes(tts_service):
                 return {"audio": audio_b64}
             
             else:  # audio format
-                audio_data = tts_service.synthesize(request.text, voice=request.voice)
+                audio_data = await asyncio.to_thread(
+                    tts_service.synthesize, request.text, voice=request.voice
+                )
                 if not audio_data:
                     raise HTTPException(
                         status_code=500,
