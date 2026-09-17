@@ -1674,11 +1674,12 @@ import { invalidateSettings } from './appConfig.js';
       message: items.map(item => String(item.message || '').trim()).filter(Boolean).join('\n\n'),
       createdAt: items[0]?.createdAt || Date.now(),
     };
+  }
 
   // Programmatic send for non-keyboard callers (voice mode auto-send).
   // Busy → queue (drained by the existing queue machinery the moment the
   // stream ends); idle → the exact composer path.
-  export function send(message) {
+  function send(message) {
     if (isStreaming || _sendInFlight) return _queueAgentRequest(message);
     return _setComposerAndSend(message);
   }

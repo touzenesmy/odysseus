@@ -324,6 +324,8 @@ export async function initSttSettings() {
   var vmWrap = el('set-voiceModeWrap');
   var vadInput = el('set-vadSilenceInput');
   var vmAutoSend = el('set-voiceAutoSend');
+  var vadThreshold = el('set-vadThreshold');
+  var vadThresholdVal = el('set-vadThresholdVal');
   if (vmToggle) {
     try {
       var vsRes = await fetch('/api/auth/settings', { credentials: 'same-origin' });
@@ -331,6 +333,10 @@ export async function initSttSettings() {
       vmToggle.checked = vs.voice_mode_enabled === true;
       if (vadInput && vs.vad_silence_ms) vadInput.value = vs.vad_silence_ms;
       if (vmAutoSend) vmAutoSend.checked = vs.voice_auto_send !== false;
+      if (vadThreshold && vs.vad_threshold != null) {
+        vadThreshold.value = vs.vad_threshold;
+        if (vadThresholdVal) vadThresholdVal.textContent = vs.vad_threshold;
+      }
     } catch (e) { /* keep defaults */ }
 
     function syncVmDisabled() {
@@ -345,13 +351,21 @@ export async function initSttSettings() {
     });
     if (vadInput) vadInput.addEventListener('change', saveVoiceMode);
     if (vmAutoSend) vmAutoSend.addEventListener('change', saveVoiceMode);
+    if (vadThreshold) {
+      vadThreshold.addEventListener('input', function() {
+        if (vadThresholdVal) vadThresholdVal.textContent = vadThreshold.value;
+      });
+      vadThreshold.addEventListener('change', saveVoiceMode);
+    }
     async function saveVoiceMode() {
       try {
         var v = parseInt(vadInput.value, 10);
+        var t = parseFloat(vadThreshold ? vadThreshold.value : '0.5');
         await _postSettings({
           voice_mode_enabled: vmToggle.checked,
           vad_silence_ms: isNaN(v) ? 500 : Math.max(200, Math.min(3000, v)),
           voice_auto_send: !!(vmAutoSend && vmAutoSend.checked),
+          vad_threshold: isNaN(t) ? 0.5 : Math.max(0.05, Math.min(0.95, t)),
         });
         vmStatus.textContent = 'Saved';
         vmStatus.style.color = 'var(--fg)';
