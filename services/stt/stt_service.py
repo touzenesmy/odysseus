@@ -4,9 +4,7 @@
 import io
 import logging
 import httpx
-import tempfile
 import threading
-from pathlib import Path
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -25,7 +23,9 @@ class STTService:
 
     def __init__(self):
         self._whisper_model = None  # lazy-init
-        self._transcribe_lock = threading.Lock()  # serialize local transcriptions
+        # RLock: transcribe() holds it for the whole call AND _get_whisper
+        # takes it too (load serialization) — plain Lock would self-deadlock.
+        self._transcribe_lock = threading.RLock()
 
     # ── Settings ──
 
@@ -58,7 +58,14 @@ class STTService:
     # ── Local Whisper ──
 
     def _get_whisper(self):
-        if self._whisper_model is None:
+        if self._whisper_model is not None:
+            return self._whisper_model
+        # Load serialized under the (re-entrant) transcribe lock: transcribe()
+        # already holds it, while available/get_stats must not double-load —
+        # a CTranslate2 OOM on this shared-GPU box.
+        with self._transcribe_lock:
+            if self._whisper_model is not None:
+                return self._whisper_model
             try:
                 from faster_whisper import WhisperModel
             except ImportError:
@@ -101,18 +108,15 @@ class STTService:
         model = self._get_whisper()
         if not model:
             return None
-        tmp_path = None
         try:
-            # Write to temp file (faster-whisper needs a file path or file-like)
-            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
-                tmp.write(audio_bytes)
-                tmp_path = tmp.name
-
+            # faster-whisper decodes via PyAV, which handles a WAV BytesIO
+            # directly — no temp file (the old .webm-named temp file was
+            # never a webm; the VAD hands us a 16 kHz WAV).
             kwargs = {}
             if language:
                 kwargs["language"] = language
 
-            segments, info = model.transcribe(tmp_path, **kwargs)
+            segments, info = model.transcribe(io.BytesIO(audio_bytes), **kwargs)
             text = " ".join(seg.text.strip() for seg in segments)
 
             logger.info(f"Local STT: {len(text)} chars, lang={info.language}, prob={info.language_probability:.2f}")
@@ -120,9 +124,6 @@ class STTService:
         except Exception as e:
             logger.error(f"Local STT transcription failed: {e}", exc_info=True)
             return None
-        finally:
-            if tmp_path:
-                Path(tmp_path).unlink(missing_ok=True)
 
     # ── API endpoint ──
 
