@@ -1174,6 +1174,10 @@
             <span style="font-size:11px;margin-left:2px;">RAG</span>
             <svg class="tool-indicator-x" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
           </button>
+          <!-- Voice Mode (hidden until Settings enables it + STT is available) -->
+          <button type="button" class="input-icon-btn voice-mode-btn" title="Voice mode — dictation into the composer" id="voice-mode-btn" data-mode-tool="true" aria-label="Voice mode" aria-pressed="false" style="display:none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          </button>
           <!-- 6. Deep Research (hidden until active) -->
           <button type="button" class="input-icon-btn tool-indicator" title="Deep Research active — click to deactivate" id="research-toggle-btn" style="display:none;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
@@ -1700,6 +1704,55 @@
               </div>
               <button type="button" id="set-ttsPreviewBtn" class="admin-btn-sm" style="margin-top:4px;padding:5px 16px;font-size:12px;">Preview</button>
               <div id="set-ttsSettingsMsg" style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);"></div>
+            </div>
+          </div>
+          <!-- Speech-to-text (STT) — restored 2026-09-16 together with
+               Voice Mode (Phase 2 of the voice-mode feature). The composer's
+               old file-attach STT and the new Voice Mode both read these
+               settings; local Whisper runs on this server. -->
+          <div class="admin-card">
+            <h2 style="display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>Speech to Text<span style="flex:1"></span><label class="admin-switch"><input type="checkbox" id="set-sttEnabledToggle"><span class="admin-slider"></span></label></h2>
+            <div class="admin-toggle-sub" style="margin-bottom:8px">Transcription for the chat composer (file attach) and Voice Mode. Local Whisper runs on this server — no data leaves the machine.</div>
+            <div id="set-sttConfigWrap" style="display:flex;flex-direction:column;gap:0.5rem;">
+              <div style="display:flex;align-items:center;gap:0.75rem;">
+                <label class="settings-label">Provider</label>
+                <select id="set-sttProviderSelect" class="settings-select">
+                  <option value="disabled">Disabled</option>
+                  <option value="local" selected>Local (Whisper)</option>
+                </select>
+              </div>
+              <div id="set-sttModelRow" style="display:flex;align-items:center;gap:0.75rem;">
+                <label class="settings-label">Model</label>
+                <select id="set-sttModelSelect" class="settings-select">
+                  <option value="tiny">tiny (fastest)</option>
+                  <option value="base" selected>base</option>
+                  <option value="small">small</option>
+                  <option value="medium">medium (quality)</option>
+                  <option value="large-v3">large-v3 (best, slow)</option>
+                </select>
+                <input id="set-sttModelInput" type="text" placeholder="model name" style="flex:1;padding:5px;display:none;">
+              </div>
+              <div id="set-sttLangRow" style="display:none;align-items:center;gap:0.75rem;">
+                <label class="settings-label">Language</label>
+                <input id="set-sttLangInput" type="text" placeholder="auto (e.g. en, fr, de — leave empty for auto-detect)" style="flex:1;padding:5px;">
+              </div>
+              <div id="set-sttSettingsMsg" style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);"></div>
+              <!-- Voice Mode (hands-free dictation, Phase 2) -->
+              <div style="border-top:1px solid color-mix(in srgb, var(--fg) 12%, transparent);margin-top:0.5rem;padding-top:0.5rem;">
+                <div style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;">Voice Mode <span style="flex:1"></span><label class="admin-switch"><input type="checkbox" id="set-voiceModeToggle"><span class="admin-slider"></span></label></div>
+                <div style="font-size:11px;color:color-mix(in srgb, var(--fg) 55%, transparent);margin:4px 0 8px;">Hands-free dictation: a mic button appears in the chat composer; everything you say is typed into the message box (never sent). Local Whisper transcribes; the model above applies. Settings take effect for the next voice session — no restart needed.</div>
+                <div id="set-voiceModeWrap" style="display:flex;flex-direction:column;gap:0.5rem;">
+                  <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <button type="button" id="set-voiceModeTestBtn" class="admin-btn-sm" style="margin:0;padding:5px 12px;font-size:12px;">Test microphone</button>
+                    <span id="set-voiceModeStatus" style="font-size:11px;color:var(--fg);"></span>
+                  </div>
+                  <div id="set-vadRow" style="display:flex;align-items:center;gap:0.75rem;">
+                    <label class="settings-label">Silence to stop</label>
+                    <input id="set-vadSilenceInput" type="number" min="200" max="3000" step="50" class="settings-select" style="width:80px;padding:4px;"> ms
+                    <span style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);">— how long you pause before an utterance ends</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <!-- Teacher Model settings card hidden as part of the 2.0
@@ -2584,6 +2637,7 @@
 <script type="module" src="/static/js/tourAutoplay.js"></script>
 <script type="module" src="/static/js/fileHandler.js"></script>
 <script type="module" src="/static/js/voiceRecorder.js"></script>
+<script type="module" src="/static/js/voiceMode.js"></script>
 <script type="module" src="/static/js/models.js?v=20260715startupcalm2"></script>  <!-- This must come BEFORE app.js -->
 <script type="module" src="/static/js/rag.js"></script>
 <script type="module" src="/static/js/presets.js"></script>

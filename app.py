@@ -763,6 +763,11 @@ from routes.stt_routes import setup_stt_routes
 app.include_router(setup_stt_routes(stt_service))
 logger.info("STT service initialized (provider managed via settings)")
 
+# Voice mode (hands-free dictation) — WebSocket audio edge. Inert unless
+# voice_mode_enabled (the handler refuses the connection, see the gate).
+from routes.voice_routes import setup_voice_routes
+app.include_router(setup_voice_routes(stt_service))
+
 # Documents (artifacts/canvas)
 from routes.document.document_routes import setup_document_routes
 document_router = setup_document_routes(session_manager, upload_handler)

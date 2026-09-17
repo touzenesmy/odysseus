@@ -78,10 +78,18 @@ class STTService:
                     use_cuda = torch.cuda.is_available()
                 except Exception:
                     use_cuda = False
-                device = "cuda" if use_cuda else "cpu"
-                compute_type = "float16" if device == "cuda" else "int8"
-                self._whisper_model = WhisperModel(model_size, device=device, compute_type=compute_type)
-                logger.info(f"faster-whisper model '{model_size}' loaded on {device}")
+                devices = [("cuda", "float16"), ("cpu", "int8")] if use_cuda else [("cpu", "int8")]
+                for device, compute_type in devices:
+                    try:
+                        self._whisper_model = WhisperModel(model_size, device=device, compute_type=compute_type)
+                        logger.info(f"faster-whisper model '{model_size}' loaded on {device}")
+                        break
+                    except Exception as e:
+                        if device == "cpu":
+                            raise
+                        # CUDA is present but unusable (e.g. out of memory
+                        # while another tenant owns the GPU) — fall back to CPU.
+                        logger.warning(f"Whisper CUDA load failed ({e}); retrying on CPU")
             except Exception as e:
                 logger.error(f"Failed to load whisper model: {e}")
                 return None

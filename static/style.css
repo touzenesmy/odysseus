@@ -2653,6 +2653,28 @@ body.bg-pattern-sparkles {
       opacity: 0.8;
       background: color-mix(in srgb, var(--accent) 8%, transparent);
     }
+    /* Voice Mode toggle — pulse while listening, spinner while transcribing.
+       Phase 2 of the voice-mode feature (see specs/speech.md). */
+    .input-icon-btn.voice-mode-btn { opacity: 0.7; }
+    .input-icon-btn.voice-mode-btn.listening {
+      opacity: 1;
+      color: var(--red, #e55);
+      animation: vm-pulse 1.6s ease-in-out infinite;
+    }
+    .input-icon-btn.voice-mode-btn.transcribing {
+      opacity: 1;
+      color: var(--accent, var(--fg));
+    }
+    .input-icon-btn.voice-mode-btn.transcribing svg {
+      animation: vm-spin 0.9s linear infinite;
+    }
+    @keyframes vm-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.12); }
+    }
+    @keyframes vm-spin {
+      to { transform: rotate(360deg); }
+    }
 	    .input-icon-btn.active,
 	    .input-icon-btn.expanded {
 	      opacity: 1;

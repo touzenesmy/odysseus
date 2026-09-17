@@ -1059,6 +1059,87 @@ async function initSttSettings() {
   modelInput.addEventListener('change', saveSTT);
   langInput.addEventListener('change', saveSTT);
   if (sttEnabledToggle) sttEnabledToggle.addEventListener('change', function() { syncSttDisabled(); saveSTT(); });
+
+  /* ── Voice Mode (Phase 2) — lives in this card, saves via the same path ── */
+  var vmToggle = el('set-voiceModeToggle');
+  var vmStatus = el('set-voiceModeStatus');
+  var vmTestBtn = el('set-voiceModeTestBtn');
+  var vmWrap = el('set-voiceModeWrap');
+  var vadInput = el('set-vadSilenceInput');
+  if (vmToggle) {
+    try {
+      var vsRes = await fetch('/api/auth/settings', { credentials: 'same-origin' });
+      var vs = await vsRes.json();
+      vmToggle.checked = vs.voice_mode_enabled === true;
+      if (vadInput && vs.vad_silence_ms) vadInput.value = vs.vad_silence_ms;
+    } catch (e) { /* keep defaults */ }
+
+    function syncVmDisabled() {
+      var off = !vmToggle.checked;
+      if (vmWrap) vmWrap.style.pointerEvents = off ? 'none' : '';
+      if (vmWrap) vmWrap.style.opacity = off ? '0.45' : '';
+    }
+    syncVmDisabled();
+    vmToggle.addEventListener('change', function() {
+      syncVmDisabled();
+      saveVoiceMode();
+    });
+    if (vadInput) vadInput.addEventListener('change', saveVoiceMode);
+    async function saveVoiceMode() {
+      try {
+        var v = parseInt(vadInput.value, 10);
+        await _postSettings({
+          voice_mode_enabled: vmToggle.checked,
+          vad_silence_ms: isNaN(v) ? 500 : Math.max(200, Math.min(3000, v)),
+        });
+        vmStatus.textContent = 'Saved';
+        vmStatus.style.color = 'var(--fg)';
+        setTimeout(function() { vmStatus.textContent = ''; }, 2000);
+        if (window.voiceModeModule) window.voiceModeModule.checkAvailability();
+      } catch (e) {
+        vmStatus.textContent = 'Failed to save';
+        vmStatus.style.color = 'var(--red)';
+      }
+    }
+    // Microphone sanity check: request the mic and report what we hear.
+    if (vmTestBtn) vmTestBtn.addEventListener('click', async function() {
+      vmStatus.textContent = 'Listening… (speak now)';
+      vmStatus.style.color = 'var(--fg)';
+      var stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var src = ctx.createMediaStreamSource(stream);
+        var an = ctx.createAnalyser();
+        an.fftSize = 2048;
+        src.connect(an);
+        var buf = new Float32Array(an.fftSize);
+        var peak = 0;
+        await new Promise(function(resolve) {
+          var t0 = Date.now();
+          (function tick() {
+            an.getFloatTimeDomainData(buf);
+            for (var i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
+            if (Date.now() - t0 < 1500) requestAnimationFrame(tick);
+            else resolve();
+          })();
+        });
+        ctx.close();
+        stream.getTracks().forEach(function(t) { t.stop(); stream = null; });
+        if (peak > 0.02) {
+          vmStatus.textContent = 'Microphone OK — audio detected (peak ' + peak.toFixed(2) + ')';
+          vmStatus.style.color = 'var(--green, #4c4)';
+        } else {
+          vmStatus.textContent = 'Microphone OK — but no audio detected. Speak while testing.';
+          vmStatus.style.color = 'var(--red, #e55)';
+        }
+      } catch (e) {
+        vmStatus.textContent = e.name === 'NotAllowedError' ? 'Microphone permission denied' : 'Mic error: ' + e.message;
+        vmStatus.style.color = 'var(--red, #e55)';
+        if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+      }
+    });
+  }
 }
 
 /* ═══════════════════════════════════════════
