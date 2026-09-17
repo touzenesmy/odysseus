@@ -191,6 +191,21 @@ console.log('tts thinking-strip OK');
 }
 console.log('tts cache-cap OK');
 
+// ── TTS: the client cache key carries the settings dimensions, so a
+// voice/speed change can't return audio synthesized with the old ones ──
+{
+  const m = new ttsMod.AITTSManager();
+  const text = 'same text, different settings';
+  const k0 = m.getCacheKey(text);
+  m._voice = 'en_US-ryan-low';
+  const k1 = m.getCacheKey(text);
+  m.playbackSpeed = 1.25;
+  const k2 = m.getCacheKey(text);
+  if (new Set([k0, k1, k2]).size !== 3)
+    throw new Error('cache key ignores voice/speed: ' + [k0, k1, k2].join(','));
+}
+console.log('tts cache-key dimensions OK');
+
 // ── Voice mode: a double start() must not double-capture the mic ──
 // The stub ws opens synchronously, so the happy path completes: _ws set,
 // _starting cleared, and a second click is guarded by _ws.

@@ -28,6 +28,7 @@ session cookie itself — the same cookie the middleware validates.
 import asyncio
 import json
 import logging
+import time
 
 from fastapi import APIRouter, WebSocket
 
@@ -100,10 +101,11 @@ def setup_voice_routes(stt_service):
                 "sample_rate": SAMPLE_RATE,
                 "frame_samples": 640,
             })
+            # Log the provider from the settings already loaded — get_stats()
+            # touches the model (lazy load) and must stay off the event loop.
             logger.info("Voice mode stream opened (VAD + %s STT)",
-                        stt_service.get_stats().get("provider"))
+                        settings.get("stt_provider"))
 
-            import time
             # The client normally streams continuously (silence frames
             # included), so a gap of FLUSH_AFTER_S with no frames means the
             # stream itself stopped (tab suspended, mic cut) — flush any
@@ -161,7 +163,8 @@ def setup_voice_routes(stt_service):
 
 
 def _int_setting(name: str, default: int) -> int:
-    """Numeric setting, clamped (bad settings.json values can't stall the VAD)."""
+    """Numeric setting, coerced to int (bad settings.json values can't stall
+    the VAD — the clamping range, if any, is the caller's)."""
     from src.settings import get_setting
     try:
         return int(get_setting(name, default))
