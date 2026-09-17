@@ -12,6 +12,8 @@ class AITTSManager {
         this.browserVoice = '';
         this.playbackSpeed = 1;
         this._provider = 'disabled';
+        this._model = '';
+        this._voice = '';
         this.autoPlay = false;
         this.cache = new Map(); // Client-side audio cache
 
@@ -49,6 +51,8 @@ class AITTSManager {
             this.available = stats.available && stats.ready;
             this.playbackSpeed = stats.speed || 1;
             this._provider = stats.provider || 'disabled';
+            this._model = stats.model || '';
+            this._voice = stats.voice || '';
 
             if (stats.provider === 'browser') {
                 this.useBrowserTTS = true;
@@ -106,10 +110,14 @@ class AITTSManager {
     }
 
     getCacheKey(text) {
-        // Simple hash function for cache key
+        // Hash text + the settings dimensions that change the audio — the
+        // same family as the server key (provider|model|voice|speed). A
+        // voice/speed change must not return audio made with the old ones.
+        const s = [this._provider, this._model, this._voice,
+                   this.playbackSpeed, text].join('|');
         let hash = 0;
-        for (let i = 0; i < text.length; i++) {
-            const char = text.charCodeAt(i);
+        for (let i = 0; i < s.length; i++) {
+            const char = s.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash;
         }
@@ -188,32 +196,6 @@ class AITTSManager {
         return voices.find(v => v.name.toLowerCase() === target) ||
                voices.find(v => v.name.toLowerCase().includes(target)) ||
                null;
-    }
-
-    async play(text) {
-        // Stop current audio if playing
-        this.stop();
-
-        const plainText = this.extractPlainText(text);
-        if (!plainText) return;
-
-        if (this.useBrowserTTS) {
-            return this._playBrowser(plainText);
-        }
-
-        try {
-            const audioUrl = await this.synthesize(text);
-
-            this.currentAudio = new Audio(audioUrl);
-            await this.currentAudio.play();
-            this.isPlaying = true;
-            // Note: onended should be set by the caller (addAITTSButton)
-            // to reset button state when audio finishes
-
-        } catch (error) {
-            console.error('Failed to play audio:', error);
-            throw error;
-        }
     }
 
     _playBrowser(plainText) {
