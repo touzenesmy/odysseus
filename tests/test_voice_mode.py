@@ -99,6 +99,46 @@ def test_vad_streaming_irregular_frames():
     assert [e["event"] for e in events] == ["start", "stop", "start", "stop"]
 
 
+def _wav_samples(data: bytes) -> np.ndarray:
+    w = wave.open(io.BytesIO(data))
+    return np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+
+
+def test_vad_audio_is_the_original_stream():
+    """The utterance WAV must be a contiguous slice of the fed stream.
+
+    Guards the feed-boundary splicing bug (the browser's 640-sample frames
+    are shorter than the 512-sample window, so a window's audio straddles
+    feed calls — the buffer must stitch across them, not re-slice).
+    """
+    speech = _fixture_pcm16()
+    stream = SILENCE + speech + SILENCE * 2
+    vad = SileroVAD()
+    events = []
+    frame = 640  # the client's exact frame size
+    for i in range(0, len(stream), frame * 2):
+        events.extend(vad.feed(stream[i:i + frame * 2]))
+    events.extend(vad.flush())
+    stops = [e for e in events if e["event"] == "stop"]
+    assert len(stops) == 1, stops
+    out = _wav_samples(stops[0]["audio"])
+    src = np.frombuffer(stream, dtype=np.int16)
+    # Anchor on the first NON-SILENT block — an all-zero pre-roll block
+    # would match the leading silence at a wrong offset. Then verify
+    # contiguity: every following block matches at its predicted offset.
+    k0 = 0
+    while k0 + 1600 < len(out) and not out[k0:k0 + 1600].any():
+        k0 += 256
+    block0 = out[k0:k0 + 1600]
+    first = next((j for j in range(0, len(src) - 1600)
+                  if (src[j:j + 1600] == block0).all()), None)
+    assert first is not None, "utterance anchor block not found in stream"
+    for k in range(k0, len(out) - 1600, 256):
+        j = first + (k - k0)
+        assert (src[j:j + 1600] == out[k:k + 1600]).all(), \
+            f"splice/skip at {k / SAMPLE_RATE:.2f}s of the utterance"
+
+
 def test_vad_blip_dropped():
     speech = _fixture_pcm16()
     blip = speech[: int(0.2 * SAMPLE_RATE) * 2]  # 200 ms < 250 ms minimum
