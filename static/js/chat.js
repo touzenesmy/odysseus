@@ -4222,7 +4222,8 @@ import { invalidateSettings } from './appConfig.js';
                     } else {
                       _renderStream({ knownNormal: true, displayText: _roundDisplayProjector.current() });
                     }
-                    if (streamingTTS) window.aiTTSManager.streamingUpdate(roundText);
+                    // TTS: reply-only text (never the model's thinking).
+                    if (streamingTTS) window.aiTTSManager.streamingUpdate(roundReplyText !== null ? roundReplyText : roundText);
                   }
                   continue;
                 }
@@ -4343,8 +4344,8 @@ import { invalidateSettings } from './appConfig.js';
                   } else {
                     _renderStream({ knownNormal: true, displayText: _roundDisplayProjector.current() });
                   }
-                  // Feed streaming TTS with accumulated text
-                  if (streamingTTS) window.aiTTSManager.streamingUpdate(roundText);
+                  // Feed streaming TTS with reply-only text (never the model's thinking)
+                  if (streamingTTS) window.aiTTSManager.streamingUpdate(roundReplyText !== null ? roundReplyText : roundText);
                 }
               } else if (json.type === 'research_progress') {
                 if (_isBg) continue; // Skip DOM updates in background
