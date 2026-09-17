@@ -42,3 +42,57 @@ const mod = await import('data:text/javascript;base64,' + Buffer.from(src).toStr
 if (!globalThis.voiceModeModule) throw new Error('voiceModeModule not registered');
 console.log('voiceMode module loaded, available =', globalThis.voiceModeModule.available);
 console.log('voiceMode OK');
+
+// ── Phase 3 behavior: _onTranscript routing (the full-loop decision) ──
+const vm = globalThis.voiceModeModule;
+const input = document.getElementById('message');
+const events = [];
+let ttsStopped = 0;
+const state = { busy: false, ttsPlaying: false };
+globalThis.sessionModule = { getCurrentSessionId: () => 's1' };
+globalThis.aiTTSManager = {
+  get isPlaying() { return state.ttsPlaying; },
+  _processing: false,
+  stop() { ttsStopped++; },
+};
+globalThis.chatModule = {
+  hasActiveStream: (sid) => state.busy,
+  send: (t) => { events.push(['send', t]); },
+  abortCurrentRequest: (x) => { events.push(['abort', x]); },
+  handleChatSubmit: async () => { events.push(['submit', input.value]); input.value = ''; },
+};
+const tick = () => new Promise(r => setTimeout(r, 20));
+const ev = (a, b) => events.some(x => x[0] === a && x[1] === b);
+
+// 1. idle + auto-send ON → transcript goes through the normal submit path
+vm.autoSend = true;
+vm._onTranscript('hello there');
+await tick();
+if (!ev('submit', 'hello there')) throw new Error('auto-send did not submit: ' + JSON.stringify(events));
+
+// 2. busy (assistant speaking) + TTS playing → barge-in: stop TTS, abort the run, queue
+events.length = 0; ttsStopped = 0; state.busy = true; state.ttsPlaying = true;
+vm._onTranscript('stop talking');
+if (ttsStopped !== 1 || !ev('abort', true) || !ev('send', 'stop talking'))
+  throw new Error('barge-in wrong: ' + JSON.stringify({ ttsStopped, events }));
+
+// 3. busy, TTS idle → just queue (drained when the stream ends)
+events.length = 0; state.ttsPlaying = false;
+vm._onTranscript('next question');
+if (!ev('send', 'next question')) throw new Error('busy queue wrong: ' + JSON.stringify(events));
+
+// 4. auto-send OFF → composer insert only
+events.length = 0; state.busy = false; vm.autoSend = false;
+vm._onTranscript('typed mode');
+await tick();
+if (input.value !== 'typed mode' || events.length !== 0)
+  throw new Error('insert-only wrong: ' + JSON.stringify({ v: input.value, events }));
+
+// 5. composer not empty → append, never steal the user's text
+events.length = 0; vm.autoSend = true; input.value = 'my draft ';
+vm._onTranscript('appended');
+await tick();
+if (input.value !== 'my draft appended' || events.length !== 0)
+  throw new Error('append wrong: ' + JSON.stringify({ v: input.value, events }));
+
+console.log('voiceMode phase3 OK');

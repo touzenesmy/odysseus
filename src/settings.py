@@ -76,6 +76,9 @@ DEFAULT_SETTINGS = {
     # transcripts to the chat composer. OFF = the endpoint refuses
     # connections and the UI toggle is hidden — zero behavior change.
     "voice_mode_enabled": False,
+    # Voice mode Phase 3: a completed utterance is sent through the
+    # normal chat pipeline automatically (off = composer insert only).
+    "voice_auto_send": True,
     # VAD knobs (services/vad/silero_vad.py): silence tail that ends an
     # utterance, and the minimum utterance length (shorter = dropped).
     "vad_silence_ms": 500,

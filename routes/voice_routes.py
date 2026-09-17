@@ -55,6 +55,7 @@ def setup_voice_routes(stt_service):
             and _provider_usable(settings),
             "stt_provider": provider,
             "vad_silence_ms": _int_setting("vad_silence_ms", 500),
+            "auto_send": bool(settings.get("voice_auto_send", True)),
         }
 
     @router.websocket("/stream")
