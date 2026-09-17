@@ -176,9 +176,10 @@ class STTService:
             return None
 
         if provider == "local":
-            # Serialized: the upstream lazy model load in _get_whisper has no
-            # lock, and concurrent first-callers would double-load (a CTranslate2
-            # OOM on this shared-GPU box). Voice mode streams utterances here.
+            # Serialized so the whole call — including the lazy model load —
+            # runs alone: concurrent first-callers must not double-load
+            # (a CTranslate2 OOM on this shared-GPU box). Voice mode streams
+            # utterances here.
             with self._transcribe_lock:
                 return self._transcribe_local(audio_bytes, language)
         elif provider.startswith("endpoint:"):

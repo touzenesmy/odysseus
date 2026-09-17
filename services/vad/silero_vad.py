@@ -178,8 +178,10 @@ class SileroVAD:
         n = len(pcm16) // 2
         if n == 0:
             return []
-        offset0 = len(self._carry) // 2 + self._total_windows * WINDOW_SAMPLES
-        self._ring.append((offset0, pcm16))
+        # Stream index of the first sample of THIS feed call (== _feed_start,
+        # computed below before any window is cut).
+        self._feed_start = len(self._carry) // 2 + self._total_windows * WINDOW_SAMPLES
+        self._ring.append((self._feed_start, pcm16))
         total = sum(len(b) for _, b in self._ring)
         if total > RING_CAP_BYTES:
             # Trim oldest: pop whole small chunks, and if the oldest chunk
@@ -196,10 +198,6 @@ class SileroVAD:
                     break
 
         events = []
-        # Absolute stream index of the first sample of THIS feed call:
-        # everything windowed so far, plus what is still sitting in the
-        # carry (fed earlier, not yet windowed).
-        self._feed_start = self._total_windows * WINDOW_SAMPLES + len(self._carry) // 2
         self._feed_pcm = pcm16
         self._n = n
         self._carry.extend(pcm16)
