@@ -158,6 +158,13 @@ def test_vad_config_min_silence_controls_split():
     assert len(segs) == 1
 
 
+def test_vad_config_clamps_negative_min_speech():
+    """A negative min_speech_ms would let blips through (content_s < -x is
+    never true). The config clamps, like the min_silence_ms clamp."""
+    assert VadConfig(min_speech_ms=-5).min_speech_ms == 0
+    assert VadConfig(min_speech_ms=250).min_speech_ms == 250
+
+
 def test_vad_threshold_gates_triggers():
     """The sensitivity knob: a stricter threshold suppresses the fixture
     entirely (its max window prob is ~0.89), while the default catches it."""
