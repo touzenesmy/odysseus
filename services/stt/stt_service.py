@@ -5,6 +5,7 @@ import io
 import logging
 import httpx
 import tempfile
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -24,6 +25,7 @@ class STTService:
 
     def __init__(self):
         self._whisper_model = None  # lazy-init
+        self._transcribe_lock = threading.Lock()  # serialize local transcriptions
 
     # ── Settings ──
 
@@ -173,7 +175,11 @@ class STTService:
             return None
 
         if provider == "local":
-            return self._transcribe_local(audio_bytes, language)
+            # Serialized: the upstream lazy model load in _get_whisper has no
+            # lock, and concurrent first-callers would double-load (a CTranslate2
+            # OOM on this shared-GPU box). Voice mode streams utterances here.
+            with self._transcribe_lock:
+                return self._transcribe_local(audio_bytes, language)
         elif provider.startswith("endpoint:"):
             endpoint_id = provider.split(":", 1)[1]
             return self._transcribe_api(audio_bytes, endpoint_id, model, language)

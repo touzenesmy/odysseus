@@ -42,16 +42,19 @@ def setup_voice_routes(stt_service):
     async def voice_status():
         """UI gate: is voice mode usable right now? (no auth beyond the
         normal HTTP middleware — mirrors the other /api/* read routes)."""
-        from src.settings import get_setting
-        try:
-            stt_stats = stt_service.get_stats()
-        except Exception:
-            stt_stats = {"available": False}
+        # Settings-only on purpose: STTService.get_stats() touches the model
+        # (available → lazy WhisperModel load = seconds of event-loop
+        # blocking on every page load). The real availability check
+        # happens at WS connect, off the loop.
+        from src.settings import load_settings
+        settings = load_settings()
+        provider = settings.get("stt_provider", "disabled")
         return {
-            "enabled": bool(get_setting("voice_mode_enabled", False)),
-            "stt_available": bool(stt_stats.get("available")),
-            "stt_provider": stt_stats.get("provider"),
-            "vad_silence_ms": int(get_setting("vad_silence_ms", 500)),
+            "enabled": bool(settings.get("voice_mode_enabled")),
+            "stt_available": bool(settings.get("stt_enabled"))
+            and _provider_usable(settings),
+            "stt_provider": provider,
+            "vad_silence_ms": _int_setting("vad_silence_ms", 500),
         }
 
     @router.websocket("/stream")
@@ -62,23 +65,33 @@ def setup_voice_routes(stt_service):
                 await ws.close(code=4401)
                 return
 
-            from src.settings import get_setting
-            if not get_setting("voice_mode_enabled", False):
+            from src.settings import load_settings
+            settings = load_settings()
+            if not settings.get("voice_mode_enabled"):
                 await _send(ws, {"error": {"code": "voice_mode_disabled",
                                            "message": "Voice mode is not enabled in Settings."}})
                 await ws.close(code=4001)
                 return
 
-            if not stt_service.available:
+            if not _provider_usable(settings):
                 await _send(ws, {"error": {"code": "stt_unavailable",
-                                           "message": "Enable an STT provider (local Whisper) in Settings → Voice Mode."}})
+                                           "message": "Enable a server STT provider (local Whisper) in Settings → Voice Mode."}})
+                await ws.close(code=4002)
+                return
+
+            # Off the event loop: for 'local' this warms the Whisper model
+            # (a one-time multi-second load) before the first utterance.
+            stt_ok = await asyncio.to_thread(lambda: bool(stt_service.available))
+            if not stt_ok:
+                await _send(ws, {"error": {"code": "stt_unavailable",
+                                           "message": "STT provider is not available (model failed to load)."}})
                 await ws.close(code=4002)
                 return
 
             from services.vad.silero_vad import SileroVAD, VadConfig, SAMPLE_RATE
             vad = SileroVAD(VadConfig(
-                min_silence_ms=int(get_setting("vad_silence_ms", 500)),
-                min_speech_ms=int(get_setting("vad_min_speech_ms", 250)),
+                min_silence_ms=_int_setting("vad_silence_ms", 500),
+                min_speech_ms=_int_setting("vad_min_speech_ms", 250),
             ))
             await _send(ws, {
                 "status": "ready",
@@ -94,7 +107,7 @@ def setup_voice_routes(stt_service):
             # stream itself stopped (tab suspended, mic cut) — flush any
             # in-flight utterance instead of waiting for a silence tail
             # that will never arrive.
-            FLUSH_AFTER_S = 1.0
+            FLUSH_AFTER_S = 2.0
             last_audio = time.monotonic()
 
             async def emit(events):
@@ -145,6 +158,21 @@ def setup_voice_routes(stt_service):
                 pass
 
     return router
+
+
+def _int_setting(name: str, default: int) -> int:
+    """Numeric setting, clamped (bad settings.json values can't stall the VAD)."""
+    from src.settings import get_setting
+    try:
+        return int(get_setting(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _provider_usable(settings: dict) -> bool:
+    """Voice mode needs a server-side STT provider (browser runs client-side)."""
+    return settings.get("stt_provider") in ("local",) or str(
+        settings.get("stt_provider", "")).startswith("endpoint:")
 
 
 def _ws_authenticated(ws: WebSocket) -> bool:
