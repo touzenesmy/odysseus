@@ -70,6 +70,16 @@ DEFAULT_SETTINGS = {
     "stt_provider": "disabled",
     "stt_model": "base",
     "stt_language": "",
+    # Voice mode (hands-free dictation, Phase 2 of the voice-mode feature):
+    # a WebSocket audio edge (routes/voice_routes.py) that streams mic audio,
+    # runs server-side Silero VAD + the STT provider above, and returns
+    # transcripts to the chat composer. OFF = the endpoint refuses
+    # connections and the UI toggle is hidden — zero behavior change.
+    "voice_mode_enabled": False,
+    # VAD knobs (services/vad/silero_vad.py): silence tail that ends an
+    # utterance, and the minimum utterance length (shorter = dropped).
+    "vad_silence_ms": 500,
+    "vad_min_speech_ms": 250,
     "search_provider": "searxng",
     # Default fallback chain — when the primary provider fails or
     # rate-limits, we try DuckDuckGo next. Free, no API key required, so
