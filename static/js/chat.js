@@ -3880,6 +3880,12 @@ import { loadPanel } from './panels.js';
                 } else {
                   _cancelLiveThinkingWork();
                 }
+                // Speak this round's unspoken tail before the counters reset.
+                // Reply-only text: roundReplyText after a thinking transition,
+                // raw roundText otherwise (a round that never thought has no
+                // thinking to strip). Never the accumulated — that carries the
+                // thinking markup.
+                if (streamingTTS) window.aiTTSManager.streamingFlushRound(roundReplyText !== null ? roundReplyText : roundText);
                 _finalizeRoundRender();
                 // Mark thread as connected to bubble below
                 const _activeThread = document.querySelector('.agent-thread.streaming');
@@ -4272,8 +4278,10 @@ import { loadPanel } from './panels.js';
               ttsBtn.title = 'Read aloud';
             };
             if (streamingTTS) {
-              // Flush remaining partial sentence and attach the real button
-              window.aiTTSManager.streamingEnd(accumulated);
+              // Flush the last round's unspoken tail (reply-only text — never
+              // the raw accumulated, which carries the thinking markup) and
+              // attach the real button
+              window.aiTTSManager.streamingEnd(roundReplyText !== null ? roundReplyText : roundText);
               window.aiTTSManager.streamingAttachButton(ttsBtn, resetFn);
               // If still playing sentences from the stream, show stop icon
               if (window.aiTTSManager.isPlaying || window.aiTTSManager._processing) {

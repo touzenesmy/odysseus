@@ -69,12 +69,15 @@ class AITTSManager {
     }
 
     extractPlainText(content) {
-        // Strip <think>/<thinking> blocks (model reasoning)
-        let cleaned = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+        // Strip <think>/<thinking> blocks (model reasoning). The open tag
+        // tolerates attributes — the app rewrites it to <think time="12.3">
+        // when a thinking section finalizes, and the bare-tag regex let that
+        // block (and the reasoning inside it) reach the synthesizer.
+        let cleaned = content.replace(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>[\s\S]*?<\/(?:think(?:ing)?|thought)>/gi, '');
         // Malformed stream (never closed): drop from the last unclosed
         // thinking tag to the end — the rest is reasoning, not reply.
-        let openTags = cleaned.match(/<think(?:ing)?>/gi) || [];
-        let closeTags = cleaned.match(/<\/think(?:ing)?>/gi) || [];
+        let openTags = cleaned.match(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>/gi) || [];
+        let closeTags = cleaned.match(/<\/(?:think(?:ing)?|thought)>/gi) || [];
         if (openTags.length > closeTags.length) {
             cleaned = cleaned.slice(0, cleaned.lastIndexOf(openTags[openTags.length - 1]));
         }
@@ -430,9 +433,10 @@ class AITTSManager {
         }
     }
 
-    streamingEnd(finalText) {
-        if (!this._streamActive) return;
-        this._streamActive = false;
+    // Enqueue the portion of finalText not yet spoken during streaming.
+    // finalText must be the same reply-only text family that streamingUpdate
+    // received (the offsets are only valid within one round's text).
+    _flushStreamingTail(finalText) {
         if (this._streamDebounceTimer) {
             clearTimeout(this._streamDebounceTimer);
             this._streamDebounceTimer = null;
@@ -451,6 +455,20 @@ class AITTSManager {
             var resetFn = this._streamResetFn || function() {};
             this.enqueue(remaining, btn, resetFn);
         }
+    }
+
+    // Round boundary (chat.js agent_step): speak this round's leftover tail,
+    // then start the next round's offset clean.
+    streamingFlushRound(finalText) {
+        if (!this._streamActive) return;
+        this._flushStreamingTail(finalText);
+        this._streamSentencesSent = 0;
+    }
+
+    streamingEnd(finalText) {
+        if (!this._streamActive) return;
+        this._streamActive = false;
+        this._flushStreamingTail(finalText);
         this._streamSentencesSent = 0;
     }
 
