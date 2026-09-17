@@ -83,6 +83,9 @@ DEFAULT_SETTINGS = {
     # utterance, and the minimum utterance length (shorter = dropped).
     "vad_silence_ms": 500,
     "vad_min_speech_ms": 250,
+    # Silero speech probability threshold (0.05–0.95): higher = stricter,
+    # fewer false triggers (breathing, background noise).
+    "vad_threshold": 0.5,
     "search_provider": "searxng",
     # Default fallback chain — when the primary provider fails or
     # rate-limits, we try DuckDuckGo next. Free, no API key required, so

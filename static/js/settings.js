@@ -1066,6 +1066,8 @@ async function initSttSettings() {
   var vmTestBtn = el('set-voiceModeTestBtn');
   var vmWrap = el('set-voiceModeWrap');
   var vadInput = el('set-vadSilenceInput');
+  var vadThreshold = el('set-vadThreshold');
+  var vadThresholdVal = el('set-vadThresholdVal');
   var vmAutoSend = el('set-voiceAutoSend');
   if (vmToggle) {
     try {
@@ -1073,6 +1075,10 @@ async function initSttSettings() {
       var vs = await vsRes.json();
       vmToggle.checked = vs.voice_mode_enabled === true;
       if (vadInput && vs.vad_silence_ms) vadInput.value = vs.vad_silence_ms;
+      if (vadThreshold && vs.vad_threshold != null) {
+        vadThreshold.value = vs.vad_threshold;
+        if (vadThresholdVal) vadThresholdVal.textContent = vs.vad_threshold;
+      }
       if (vmAutoSend) vmAutoSend.checked = vs.voice_auto_send !== false;
     } catch (e) { /* keep defaults */ }
 
@@ -1087,13 +1093,21 @@ async function initSttSettings() {
       saveVoiceMode();
     });
     if (vadInput) vadInput.addEventListener('change', saveVoiceMode);
+    if (vadThreshold) {
+      vadThreshold.addEventListener('input', function() {
+        if (vadThresholdVal) vadThresholdVal.textContent = vadThreshold.value;
+      });
+      vadThreshold.addEventListener('change', saveVoiceMode);
+    }
     if (vmAutoSend) vmAutoSend.addEventListener('change', saveVoiceMode);
     async function saveVoiceMode() {
       try {
         var v = parseInt(vadInput.value, 10);
+        var t = parseFloat(vadThreshold ? vadThreshold.value : '0.5');
         await _postSettings({
           voice_mode_enabled: vmToggle.checked,
           vad_silence_ms: isNaN(v) ? 500 : Math.max(200, Math.min(3000, v)),
+          vad_threshold: isNaN(t) ? 0.5 : Math.max(0.05, Math.min(0.95, t)),
           voice_auto_send: !!(vmAutoSend && vmAutoSend.checked),
         });
         vmStatus.textContent = 'Saved';

@@ -55,6 +55,7 @@ def setup_voice_routes(stt_service):
             and _provider_usable(settings),
             "stt_provider": provider,
             "vad_silence_ms": _int_setting("vad_silence_ms", 500),
+            "vad_threshold": _float_setting("vad_threshold", 0.5),
             "auto_send": bool(settings.get("voice_auto_send", True)),
         }
 
@@ -91,6 +92,7 @@ def setup_voice_routes(stt_service):
 
             from services.vad.silero_vad import SileroVAD, VadConfig, SAMPLE_RATE
             vad = SileroVAD(VadConfig(
+                threshold=_float_setting("vad_threshold", 0.5),
                 min_silence_ms=_int_setting("vad_silence_ms", 500),
                 min_speech_ms=_int_setting("vad_min_speech_ms", 250),
             ))
@@ -166,6 +168,15 @@ def _int_setting(name: str, default: int) -> int:
     from src.settings import get_setting
     try:
         return int(get_setting(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _float_setting(name: str, default: float) -> float:
+    """Float setting, clamped to [0.05, 0.95] (same contract as _int_setting)."""
+    from src.settings import get_setting
+    try:
+        return max(0.05, min(0.95, float(get_setting(name, default))))
     except (TypeError, ValueError):
         return default
 

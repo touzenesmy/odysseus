@@ -118,6 +118,15 @@ def test_vad_config_min_silence_controls_split():
     assert len(segs) == 1
 
 
+def test_vad_threshold_gates_triggers():
+    """The sensitivity knob: a stricter threshold suppresses the fixture
+    entirely (its max window prob is ~0.89), while the default catches it."""
+    speech = _fixture_pcm16()
+    assert len(detect_speech(SILENCE + speech + SILENCE)) == 1
+    assert detect_speech(SILENCE + speech + SILENCE,
+                         config=VadConfig(threshold=0.9)) == []
+
+
 def test_vad_wav_is_decodable():
     speech = _fixture_pcm16()
     segs = detect_speech(SILENCE + speech + SILENCE)
@@ -316,6 +325,15 @@ def test_status_endpoint(voice_app):
     assert body["stt_available"] is True
     assert body["stt_provider"] == "local"
     assert body["vad_silence_ms"] == 500
+    assert body["vad_threshold"] == 0.5
+
+
+def test_status_clamps_vad_threshold(voice_app):
+    from fastapi.testclient import TestClient
+    stt = _StubSTT(available=True, provider="local")
+    app = voice_app(stt, voice_enabled=True, extra={"vad_threshold": 2.0})
+    body = TestClient(app).get("/api/voice/status").json()
+    assert body["vad_threshold"] == 0.95
 
 
 def test_status_is_settings_only_and_fast(voice_app):
@@ -351,6 +369,7 @@ def test_settings_defaults_inert():
     assert DEFAULT_SETTINGS["stt_enabled"] is False
     assert DEFAULT_SETTINGS["vad_silence_ms"] == 500
     assert DEFAULT_SETTINGS["vad_min_speech_ms"] == 250
+    assert DEFAULT_SETTINGS["vad_threshold"] == 0.5
 
 
 def test_settings_save_roundtrip_voice_keys(tmp_path, monkeypatch):
@@ -380,12 +399,15 @@ def test_settings_save_roundtrip_voice_keys(tmp_path, monkeypatch):
     r = client.post("/api/auth/settings",
                     json={"voice_mode_enabled": True,
                           "vad_silence_ms": 600,
+                          "vad_threshold": 0.65,
                           "voice_auto_send": False},
                     cookies={"odysseus_session": "t"})
     assert r.status_code == 200
     assert r.json()["voice_mode_enabled"] is True
     assert stored["voice_mode_enabled"] is True
     assert stored["vad_silence_ms"] == 600
+    assert r.json()["vad_threshold"] == 0.65
+    assert stored["vad_threshold"] == 0.65
     assert r.json()["voice_auto_send"] is False
     assert stored["voice_auto_send"] is False
 

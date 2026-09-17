@@ -1756,6 +1756,12 @@
                     <input id="set-vadSilenceInput" type="number" min="200" max="3000" step="50" class="settings-select" style="width:80px;padding:4px;"> ms
                     <span style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);">— how long you pause before an utterance ends</span>
                   </div>
+                  <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <label class="settings-label" for="set-vadThreshold">Mic sensitivity</label>
+                    <input id="set-vadThreshold" type="range" class="preset-range" min="0.1" max="0.9" step="0.05" value="0.5" style="flex:1;">
+                    <span id="set-vadThresholdVal" style="font-size:11px;width:28px;text-align:right;">0.5</span>
+                    <span style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);">— higher = stricter (fewer false triggers from breathing/background noise)</span>
+                  </div>
                 </div>
               </div>
             </div>
