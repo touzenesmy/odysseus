@@ -2469,7 +2469,10 @@ function initializeEventListeners() {
     ttsBtn.addEventListener('click', () => {
       const isActive = !ttsBtn.classList.contains('active');
       ttsBtn.classList.toggle('active', isActive);
-      if (window.aiTTSManager) window.aiTTSManager.autoPlay = isActive;
+      if (window.aiTTSManager) {
+        window.aiTTSManager.autoPlay = isActive;
+        if (!isActive) window.aiTTSManager.stop();  // TTS off = silence now
+      }
       const s = loadToggleState(); s.ttsMode = isActive; saveToggleState(s);
       updatePlusDot();
     });

@@ -54,12 +54,12 @@ const vm = globalThis.voiceModeModule;
 const input = document.getElementById('message');
 const events = [];
 let ttsStopped = 0;
-const state = { busy: false, ttsPlaying: false };
+const state = { busy: false, ttsPlaying: false, processing: false };
 globalThis.sessionModule = { getCurrentSessionId: () => 's1' };
 globalThis.aiTTSManager = {
   get isPlaying() { return state.ttsPlaying; },
-  _processing: false,
-  stop() { ttsStopped++; },
+  get _processing() { return state.processing; },
+  stop() { ttsStopped++; state.ttsPlaying = false; state.processing = false; },
 };
 globalThis.chatModule = {
   hasActiveStream: (sid) => state.busy,
@@ -76,11 +76,18 @@ vm._onTranscript('hello there');
 await tick();
 if (!ev('submit', 'hello there')) throw new Error('auto-send did not submit: ' + JSON.stringify(events));
 
-// 2. busy (assistant speaking) + TTS playing → barge-in: stop TTS, abort the run, queue
+// 2. Barge-in fires at VAD speech onset (before the transcript arrives):
+//    stop TTS + abort the run — the assistant goes silent instantly.
 events.length = 0; ttsStopped = 0; state.busy = true; state.ttsPlaying = true;
+vm._onMessage(JSON.stringify({ vad: 'start' }));
+if (ttsStopped !== 1 || !ev('abort', true))
+  throw new Error('onset barge-in wrong: ' + JSON.stringify({ ttsStopped, events }));
+
+// 2b. The transcript arrives after the onset (VAD tail + STT) → just queue
+events.length = 0; ttsStopped = 0;
 vm._onTranscript('stop talking');
-if (ttsStopped !== 1 || !ev('abort', true) || !ev('send', 'stop talking'))
-  throw new Error('barge-in wrong: ' + JSON.stringify({ ttsStopped, events }));
+if (ttsStopped !== 0 || !ev('send', 'stop talking'))
+  throw new Error('barge-in queue wrong: ' + JSON.stringify({ ttsStopped, events }));
 
 // 3. busy, TTS idle → just queue (drained when the stream ends)
 events.length = 0; state.ttsPlaying = false;
