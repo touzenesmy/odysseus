@@ -214,13 +214,26 @@ class SileroVAD:
         return events
 
     def _extend_to(self, idx: int):
-        """Extend the utterance buffer with fed audio up to sample ``idx``
-        (from the current feed chunk; pre-roll comes from the ring)."""
+        """Extend the utterance buffer with fed audio up to sample ``idx``.
+
+        The buffer lags the stream by one window (the 512-sample window
+        being scored was cut from an earlier feed), so [buf_end,
+        feed_start) was fed by an EARLIER feed call — recover it from the
+        pre-roll ring (500 ms cap ≫ the 64 ms max lag, so coverage is
+        guaranteed). Slicing that range out of THIS feed's PCM would splice
+        audio from up to 64 ms in the future into every utterance: the
+        browser streams 640-sample frames, shorter than the 512-sample
+        window, so each feed's tail is already part of the next window.
+        """
         if not self._in_speech or self._buf_full:
             return
         end = min(idx, self._feed_start + self._n)
         if end <= self._buf_end_idx:
             return
+        gap_end = min(end, self._feed_start)
+        if gap_end > self._buf_end_idx:
+            self._buf.extend(self._ring_slice(self._buf_end_idx, gap_end))
+            self._buf_end_idx = gap_end
         src = self._buf_end_idx - self._feed_start
         if src < 0:
             src = 0
@@ -294,24 +307,6 @@ class SileroVAD:
             total = self._total_windows * WINDOW_SAMPLES
             return self._stop(total, total, "flush")
         return []
-
-    def reset(self):
-        """Drop all state (re-arm, e.g. after a client reconnect)."""
-        self._h = np.zeros((1, 1, 128), dtype=np.float32)
-        self._c = np.zeros((1, 1, 128), dtype=np.float32)
-        self._context = np.zeros((1, 64), dtype=np.float32)
-        self._ring = []
-        self._in_speech = False
-        self._speech_start = 0
-        self._trigger_idx = 0
-        self._temp_end = 0
-        self._force_split_at = 0
-        self._total_windows = 0
-        self._carry = bytearray()
-        self._buf = bytearray()
-        self._buf_start_idx = 0
-        self._buf_end_idx = 0
-        self._buf_full = False
 
     # ── helpers ──
 

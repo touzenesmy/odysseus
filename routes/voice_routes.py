@@ -13,10 +13,9 @@ Protocol (WS ``/api/voice/stream``):
   client → server
     binary            PCM16 LE, 16 kHz, mono (20 ms / 640-sample frames;
                       any size is tolerated — the server reslices)
-    text JSON        {"phase": "stt"}            re-arm VAD state
   server → client
     text JSON        {"status": "ready", ...}    on connect (after gates)
-                     {"vad": "start"|"stop"}    VAD pulse for the UI
+                     {"vad": "start"}           VAD pulse for the UI
                      {"transcript": str,
                       "stt_ms": int, "audio_ms": int}
                      {"error": {"code": str, "message": str}}
@@ -150,8 +149,6 @@ def setup_voice_routes(stt_service):
                 if pcm:
                     last_audio = time.monotonic()
                     await emit(vad.feed(pcm))
-                elif msg.get("text"):
-                    _handle_control(ws, msg["text"])
         except Exception as e:
             logger.debug("Voice mode stream ended: %s", e)
         finally:
@@ -204,19 +201,6 @@ def _ws_authenticated(ws: WebSocket) -> bool:
         return bool(token) and manager.validate_token(token)
     except Exception:
         return False
-
-
-def _handle_control(ws: WebSocket, text: str):
-    """Client control frames ({"phase": ...})."""
-    try:
-        data = json.loads(text)
-    except (ValueError, TypeError):
-        return
-    if not isinstance(data, dict):
-        return
-    # Phase 2 only runs the STT phase; the TTS phase arrives with Phase 3
-    # (sentence-streamed playback) and is intentionally a no-op for now.
-    # {"phase": "stt"} is accepted silently — VAD state is continuous.
 
 
 async def _send(ws: WebSocket, payload: dict):
