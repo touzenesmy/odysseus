@@ -20,6 +20,7 @@ class VoiceModeModule {
     this.active = false;             // user turned voice mode on
     this.listening = false;          // ws open + streaming (UI pulse)
     this.transcribing = false;       // an utterance is in STT (UI state)
+    this._onsetDuringTTS = false;    // an onset fired while TTS was audible, unresolved (echo gate)
     this._ws = null;
     this._audioCtx = null;
     this._stream = null;
@@ -160,6 +161,7 @@ class VoiceModeModule {
     } else if (data.vad === 'start') {
       this.listening = true;
       this._updateBtn();
+      this._onsetDuringTTS ||= this._ttsAudible();  // echo gate: was the assistant speaking?
       this._bargeIn();  // real speech onset → silence the assistant NOW
     } else if (data.stt === 'start') {
       this.transcribing = true;
@@ -190,6 +192,11 @@ class VoiceModeModule {
     return m && m.getCurrentSessionId ? m.getCurrentSessionId() : null;
   }
 
+  _ttsAudible() {
+    const tts = window.aiTTSManager;
+    return !!(tts && (tts.isPlaying || tts._processing));
+  }
+
   _bargeIn() {
     // Fired on every VAD speech onset — including the ones that end up as
     // noise blips (dropped at the silence tail). That is the point: silence
@@ -207,6 +214,21 @@ class VoiceModeModule {
   _onTranscript(text) {
     // Phase 3 — the full loop. A completed utterance either barges in on a
     // spoken reply or is sent straight into the normal chat pipeline.
+    // Echo gate (Phase 3.7): an utterance that STARTED while the assistant's
+    // TTS was audible is the mic hearing the assistant's own voice (AEC has
+    // no clean far-end reference — the TTS plays in the same tab), and its
+    // transcript is empty or a mangled word or two. Drop it so it never
+    // reaches the composer / auto-send. A real barge-in also starts during
+    // TTS, but its abort already fired at the onset (_bargeIn) and a
+    // substantive one is multi-word — the short-transcript guard preserves
+    // it (a ≤2-word barge-in like "stop" loses only its words, which add
+    // nothing once the assistant is already stopping). The flag is OR-ed at
+    // the onset (not overwritten) so a later user onset can't clear a
+    // pending echo before its transcript arrives; it is consumed by the
+    // first transcript after it.
+    const wasTTS = this._onsetDuringTTS;
+    this._onsetDuringTTS = false;
+    if (wasTTS && text.trim().split(/\s+/).filter(Boolean).length <= 2) return;
     const cm = window.chatModule;
     const busy = (sid) => !!(cm && cm.hasActiveStream && sid && cm.hasActiveStream(sid));
     // Barge-in already happened at the VAD speech onset (_onMessage). The
