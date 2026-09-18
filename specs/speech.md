@@ -89,6 +89,15 @@ Route behavior:
   synthesis (used for auditions);
 - `GET /api/tts/voices` lists cached Piper voices (name plus display
   metadata) for the settings UI; it never loads models;
+- `POST /api/tts/voices/add` downloads a Piper voice into the cache dir —
+  body `{source}` is either a bare `locale-name-quality` voice name
+  (resolved against the `rhasspy/piper-voices` HF repo) or a direct
+  http(s) link to a `.onnx` file. It streams to a `.part` temp file with a
+  100 MB cap and renames atomically, so a failure leaves no partial voice;
+  it also fetches the `.onnx.json` sidecar (PiperVoice.load REQUIRES it — a
+  `.onnx`-only source still lands, flagged with `warning` in the response).
+  Bad sources return 400 with a user-facing message. The `GET /api/tts/voices`
+  live scan picks a new voice up immediately — no restart, no page reload;
 - binary responses choose WAV or MP3 MIME by audio magic bytes;
 - synthesis input is passed to the service as submitted and capped there;
 - malformed or nonpositive `tts_speed` falls back to `1.0`;
@@ -119,7 +128,7 @@ Tests: `tests/test_voice_mode.py` (VAD engine on a real TTS-generated fixture in
 
 Speech providers are global settings under `data/settings.json`, with defaults in `src/settings.py`. Settings reads are scrubbed for non-admin callers, writes are admin-only, and `manage_settings` can change non-secret speech settings through aliases.
 
-Both speech settings cards were restored 2026-09-16 (they had been hidden/removed in the DOM); all backend speech settings now have a UI row. The settings JS still exits cleanly when a card's DOM nodes are absent (defensive; the cards are present in the current `index.html`). The TTS card shows Provider (disabled/browser/local/piper/endpoint), a Piper voice dropdown fed by `GET /api/tts/voices` with an Audition button (fixed sentence, voice override, no settings write), and the existing Preview button honors the selected Piper voice. The STT card (restored with voice mode) shows Provider/Model/Language plus the Voice Mode section (enable toggle, microphone test, silence-to-stop slider, mic-sensitivity slider, Auto-send toggle).
+Both speech settings cards were restored 2026-09-16 (they had been hidden/removed in the DOM); all backend speech settings now have a UI row. The settings JS still exits cleanly when a card's DOM nodes are absent (defensive; the cards are present in the current `index.html`). The TTS card shows Provider (disabled/browser/local/piper/endpoint), a Piper voice dropdown fed by `GET /api/tts/voices` with an Audition button (fixed sentence, voice override, no settings write), and the existing Preview button honors the selected Piper voice. The same row has a "+ Add voice" downloader (settings UI, 2026-09-17): paste a voice name or a direct `.onnx` link → `POST /api/tts/voices/add` → status line shows the link check, the download in progress, and the result (size + time) → the dropdown refreshes in place (no page reload) with the new voice selected and auto-auditioned. The STT card (restored with voice mode) shows Provider/Model/Language plus the Voice Mode section (enable toggle, microphone test, silence-to-stop slider, mic-sensitivity slider, Auto-send toggle).
 
 `routes.model_routes` clears `tts_provider` and `stt_provider` references when a referenced model endpoint is deleted.
 
