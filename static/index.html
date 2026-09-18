@@ -1690,6 +1690,18 @@
                 <label class="settings-label">Piper voice</label>
                 <select id="set-ttsPiperVoiceSelect" class="settings-select" style="flex:1;"></select>
                 <button type="button" id="set-ttsPiperAuditionBtn" class="admin-btn-sm" style="margin:0;padding:5px 12px;font-size:12px;">Audition</button>
+                <button type="button" id="set-ttsPiperAddBtn" class="admin-btn-sm" style="margin:0;padding:5px 12px;font-size:12px;">+ Add voice</button>
+              </div>
+              <!-- Piper voice downloader — hidden until "+ Add voice" is
+                   clicked. Paste a voice name (en_US-amy-medium) or a direct
+                   .onnx link; status line shows while downloading / on done. -->
+              <div id="set-ttsPiperAddRow" style="display:none;flex-direction:column;gap:0.4rem;border-left:2px solid var(--border, #333);padding-left:0.75rem;">
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <input id="set-ttsPiperAddInput" type="text" placeholder="voice name (en_US-amy-medium) or .onnx link"
+                         style="flex:1;padding:5px;font-size:12px;background:transparent;border:1px solid var(--border, #333);border-radius:4px;color:var(--fg);">
+                  <button type="button" id="set-ttsPiperAddGoBtn" class="admin-btn-sm" style="margin:0;padding:5px 12px;font-size:12px;">Download</button>
+                </div>
+                <div id="set-ttsPiperAddMsg" style="font-size:11px;color:color-mix(in srgb, var(--fg) 45%, transparent);"></div>
               </div>
               <div id="set-ttsSpeedRow" style="display:flex;align-items:center;gap:0.75rem;">
                 <label class="settings-label">Speed</label>

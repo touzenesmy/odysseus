@@ -761,6 +761,11 @@ async function initTtsSettings() {
   var piperVoiceSelect = el('set-ttsPiperVoiceSelect');
   var piperVoiceRow = el('set-ttsPiperVoiceRow');
   var piperAuditionBtn = el('set-ttsPiperAuditionBtn');
+  var piperAddBtn = el('set-ttsPiperAddBtn');
+  var piperAddRow = el('set-ttsPiperAddRow');
+  var piperAddInput = el('set-ttsPiperAddInput');
+  var piperAddGoBtn = el('set-ttsPiperAddGoBtn');
+  var piperAddMsg = el('set-ttsPiperAddMsg');
   var ttsMsg = el('set-ttsSettingsMsg');
   var ttsEnabledToggle = el('set-ttsEnabledToggle');
   var ttsConfigWrap = provSel ? provSel.closest('div[style*="flex-direction"]') : null;
@@ -778,6 +783,9 @@ async function initTtsSettings() {
     voiceRow.style.display = (prov === 'disabled' || prov === 'piper') ? 'none' : 'flex';
     speedRow.style.display = prov === 'disabled' ? 'none' : 'flex';
     if (piperVoiceRow) piperVoiceRow.style.display = prov === 'piper' ? 'flex' : 'none';
+    // The downloader row collapses to its button whenever the provider
+    // changes (its state is only meaningful while Piper is selected).
+    if (piperAddRow) piperAddRow.style.display = 'none';
     if (isEndpoint()) {
       modelSelect.style.display = ''; modelInput.style.display = 'none';
       voiceSelect.style.display = ''; voiceInput.style.display = 'none';
@@ -875,10 +883,36 @@ async function initTtsSettings() {
   speedSelect.addEventListener('change', saveAndClearCache);
   if (ttsEnabledToggle) ttsEnabledToggle.addEventListener('change', function() { syncTtsDisabled(); saveTTS(); });
 
-  // Piper voice audition — synthesizes a fixed sentence with the selected
-  // voice via the voice override (settings are not written).
+  // Piper voice audition — synthesizes a sample with the given voice via the
+  // voice override (settings are not written). Shared by the Audition button
+  // and the post-download auto-audition.
+  var auditionAudio = null;
+  var AUDITION_TEXT = {
+    en: 'Hello, this is how I sound. I live on your server and speak at conversation speed.',
+    fr: "Bonjour, voici ma voix. Je vis sur votre serveur et je parle à la vitesse d'une conversation."
+  };
+  function auditionTextFor(name) {
+    return AUDITION_TEXT[String(name).split('_')[0]] || AUDITION_TEXT.en;
+  }
+  async function playPiperVoice(name, text) {
+    if (auditionAudio) { auditionAudio.pause(); auditionAudio = null; }
+    var res = await fetch('/api/tts/synthesize', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, format: 'audio', voice: name })
+    });
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return {}; });
+      throw new Error((err.detail && err.detail.message) || err.detail || 'Synthesis failed');
+    }
+    var blob = await res.blob();
+    var url = URL.createObjectURL(blob);
+    auditionAudio = new Audio(url);
+    auditionAudio.onended = function() { URL.revokeObjectURL(url); auditionAudio = null; };
+    auditionAudio.onerror = function() { URL.revokeObjectURL(url); auditionAudio = null; };
+    await auditionAudio.play().catch(function(e) { throw new Error('Playback failed: ' + e.message); });
+  }
   if (piperAuditionBtn) {
-    var auditionAudio = null;
     piperAuditionBtn.addEventListener('click', async function() {
       var name = piperVoiceSelect ? piperVoiceSelect.value : '';
       if (!name) {
@@ -886,29 +920,77 @@ async function initTtsSettings() {
         setTimeout(function() { ttsMsg.textContent = ''; }, 2000); return;
       }
       try {
-        if (auditionAudio) { auditionAudio.pause(); auditionAudio = null; }
-        var res = await fetch('/api/tts/synthesize', {
-          method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: 'Hello, this is how I sound. I live on your server and speak at conversation speed.',
-            format: 'audio', voice: name
-          })
-        });
-        if (!res.ok) {
-          var err = await res.json().catch(function() { return {}; });
-          throw new Error(err.detail?.message || 'Synthesis failed');
-        }
-        var blob = await res.blob();
-        var url = URL.createObjectURL(blob);
-        auditionAudio = new Audio(url);
-        auditionAudio.onended = function() { URL.revokeObjectURL(url); auditionAudio = null; };
-        auditionAudio.onerror = function() { URL.revokeObjectURL(url); auditionAudio = null; };
-        await auditionAudio.play().catch(function(e) { throw new Error('Playback failed: ' + e.message); });
+        await playPiperVoice(name, auditionTextFor(name));
       } catch (e) {
         ttsMsg.textContent = 'Audition failed: ' + e.message; ttsMsg.style.color = 'var(--red, #e55)';
         setTimeout(function() { ttsMsg.textContent = ''; }, 2500);
       }
+    });
+  }
+
+  // Piper voice downloader — paste a voice name (resolved against the rhasspy
+  // HF repo) or a direct .onnx link. Status lives in piperAddMsg; on success
+  // the voice list refreshes in place (no page reload) and the new voice is
+  // selected + auto-auditioned.
+  function setAddMsg(text, ok) {
+    if (!piperAddMsg) return;
+    piperAddMsg.textContent = text;
+    piperAddMsg.style.color = ok === true ? 'var(--green, #50fa7b)'
+                        : ok === false ? 'var(--red, #e55)' : '';
+  }
+  async function downloadPiperVoice() {
+    if (!piperAddInput || !piperAddGoBtn) return;
+    var source = (piperAddInput.value || '').trim();
+    if (!source) { setAddMsg('Paste a voice name or a .onnx link first.', false); return; }
+    if (!/^[\w.-]+$/i.test(source.split('?')[0].split('/').pop().replace('.onnx', ''))
+        && !source.match(/^https?:\/\//i)) {
+      setAddMsg('That does not look like a voice name or an http(s) link.', false); return;
+    }
+    piperAddGoBtn.disabled = true;
+    setAddMsg('Downloading ' + source + ' …');
+    var t0 = Date.now();
+    try {
+      var res = await fetch('/api/tts/voices/add', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: source })
+      });
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok) {
+        var detail = (data && data.detail) || {};
+        throw new Error(detail.message || detail || ('Download failed (' + res.status + ')'));
+      }
+      await loadPiperVoices();
+      if (piperVoiceSelect) piperVoiceSelect.value = data.name;
+      await saveTTS();
+      fetch('/api/tts/clear-cache', { method: 'POST', credentials: 'same-origin' }).catch(function(){});
+      piperAddInput.value = '';
+      var secs = ((Date.now() - t0) / 1000).toFixed(1);
+      setAddMsg('Done: ' + data.name + ' (' + data.size_mb + ' MB, ' + secs + ' s) — auditioning…', true);
+      try {
+        await playPiperVoice(data.name, auditionTextFor(data.name));
+      } catch (e) {
+        setAddMsg('Downloaded ' + data.name + ', but the audition could not play (' + e.message + ').', false);
+      }
+    } catch (e) {
+      setAddMsg('Download failed: ' + e.message, false);
+    } finally {
+      piperAddGoBtn.disabled = false;
+    }
+  }
+  if (piperAddBtn && piperAddRow) {
+    piperAddBtn.addEventListener('click', function() {
+      var open = piperAddRow.style.display !== 'none';
+      piperAddRow.style.display = open ? 'none' : 'flex';
+      if (!open && piperAddInput) piperAddInput.focus();
+    });
+  }
+  if (piperAddGoBtn) {
+    piperAddGoBtn.addEventListener('click', downloadPiperVoice);
+  }
+  if (piperAddInput) {
+    piperAddInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') downloadPiperVoice();
     });
   }
 
