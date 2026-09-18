@@ -96,6 +96,14 @@ Route behavior:
   100 MB cap and renames atomically, so a failure leaves no partial voice;
   it also fetches the `.onnx.json` sidecar (PiperVoice.load REQUIRES it — a
   `.onnx`-only source still lands, flagged with `warning` in the response).
+  The link is a network boundary (audit round 5): the requested URL and the
+  FINAL post-redirect URL must both be public — literal-IP hosts must be
+  globally routable (loopback/LAN/metadata are refused), which closes the
+  `follow_redirects` SSRF (a public URL 302-ing to `127.0.0.1`); hostname
+  rebinding is a documented residual for a single-user tool. The final path
+  segment is also a voice NAME (a filename and a dropdown entry), so it must
+  match `[A-Za-z0-9._-]+` with no `.`/`~` prefix — a `<script>.onnx` link is
+  refused, not rendered.
   Bad sources return 400 with a user-facing message. The `GET /api/tts/voices`
   live scan picks a new voice up immediately — no restart, no page reload;
 - binary responses choose WAV or MP3 MIME by audio magic bytes;
@@ -110,6 +118,10 @@ Voice mode is the hands-free dictation edge, added 2026-09-16 (fork, Phase 2 of 
 Endpoints (`routes/voice_routes.py`, registered in `app.py` with the shared `stt_service`):
 
 - `WS /api/voice/stream` — the audio edge. Protocol: client sends binary PCM16 LE 16 kHz mono frames (any size; the server reslices into 32 ms VAD windows); the server sends `{"status":"ready"}` on connect, `{"vad":"start"}` / `{"stt":"start"}` state pulses, and `{"transcript":str,"stt_ms":int,"audio_ms":int,"reason":str}` per utterance, or `{"error":{"code","message"}}`. Close codes: 4401 unauthenticated, 4001 voice mode disabled, 4002 no STT provider available. STT runs off the event loop (`asyncio.to_thread`); a receive timeout (0.5 s) plus a 2 s quiet gap flushes any in-flight utterance instead of waiting for a silence tail that will never arrive (tab suspended, mic cut).
+  The transcript string may be `""` (a noise-only VAD segment) — the client
+  treats an empty transcript as a normal frame: it still consumes the echo-gate
+  onset flag (Phase 3.7, hardened audit round 5), so a short real barge-in
+  right after an echo is not misclassified as echo.
 - `GET /api/voice/status` — the UI gate: `voice_mode_enabled`, STT availability/provider, `vad_silence_ms`, `vad_threshold`, and `voice_auto_send`. Settings-only on purpose: it must NOT touch `STTService.get_stats()` (that path reaches the lazy WhisperModel load — seconds of event-loop blocking on every page load); the real availability check happens at WS connect, off the loop, where it also warms the model. The WS refuses the `browser` provider (client-side, not a voice-mode backend). `STTService.transcribe` serializes the local provider, and the lazy model load runs under the same (re-entrant) lock — concurrent first-callers cannot double-load the model (audit round 2, 2026-09-17).
 
 Auth: the app's HTTP `AuthMiddleware` is a `BaseHTTPMiddleware` and **cannot see WebSocket scopes**, so the WS handler validates the session cookie itself against `app.state.auth_manager` (the same cookie the middleware checks); auth-disabled deployments pass through.
