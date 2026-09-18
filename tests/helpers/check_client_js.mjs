@@ -96,10 +96,12 @@ vm._onMessage(JSON.stringify({ vad: 'start' }));
 if (ttsStopped !== 1 || !ev('abort', true))
   throw new Error('onset barge-in wrong: ' + JSON.stringify({ ttsStopped, events }));
 
-// 2b. The transcript arrives after the onset (VAD tail + STT) → just queue
+// 2b. The transcript arrives after the onset (VAD tail + STT) → just queue.
+// (Phase 3.7: a barge-in transcript during TTS must be substantive — ≤2 words
+// in that window are the echo class, dropped by the gate in _onTranscript.)
 events.length = 0; ttsStopped = 0;
-vm._onTranscript('stop talking');
-if (ttsStopped !== 0 || !ev('send', 'stop talking'))
+vm._onTranscript('stop talking, check the logs');
+if (ttsStopped !== 0 || !ev('send', 'stop talking, check the logs'))
   throw new Error('barge-in queue wrong: ' + JSON.stringify({ ttsStopped, events }));
 
 // 3. busy, TTS idle → just queue (drained when the stream ends)
@@ -122,6 +124,44 @@ if (input.value !== 'my draft appended' || events.length !== 0)
   throw new Error('append wrong: ' + JSON.stringify({ v: input.value, events }));
 
 console.log('voiceMode phase3 OK');
+
+// ── Phase 3.7: echo gate — a transcript that STARTED while the assistant's
+// TTS was audible is the mic hearing the assistant's own voice. Short ones
+// (empty / a mangled word or two) are dropped; substantive barge-ins are kept.
+{
+  const vm = globalThis.voiceModeModule;
+  vm.autoSend = true;
+
+  // (1) onset DURING TTS → 1-word echo transcript is dropped (never inserted/sent)
+  input.value = ''; events.length = 0;
+  state.busy = true; state.ttsPlaying = true; state.processing = true;
+  vm._onMessage(JSON.stringify({ vad: 'start' }));   // barge-in: abort + TTS stop
+  const aborted = events.some(e => e[0] === 'abort' && e[1] === true);
+  vm._onTranscript('You');
+  if (input.value !== '')
+    throw new Error('echo inserted into composer: ' + JSON.stringify(input.value));
+  if (events.some(e => e[0] === 'send' || e[0] === 'submit'))
+    throw new Error('echo auto-sent: ' + JSON.stringify(events));
+  if (!aborted) throw new Error('barge-in abort lost by echo gate');
+
+  // (2) onset DURING TTS → multi-word barge-in is KEPT (queued while busy)
+  input.value = ''; events.length = 0;
+  state.busy = true; state.ttsPlaying = true; state.processing = true;
+  vm._onMessage(JSON.stringify({ vad: 'start' }));
+  vm._onTranscript('stop that and check the logs instead');
+  if (!ev('send', 'stop that and check the logs instead'))
+    throw new Error('multi-word barge-in dropped: ' + JSON.stringify(events));
+
+  // (3) onset while TTS IDLE → short transcript is a real user, kept
+  input.value = ''; events.length = 0;
+  state.busy = false; state.ttsPlaying = false; state.processing = false;
+  vm._onMessage(JSON.stringify({ vad: 'start' }));
+  vm._onTranscript('Thank you.');
+  await tick();
+  if (!ev('submit', 'Thank you.'))
+    throw new Error('idle short transcript dropped: ' + JSON.stringify({ v: input.value, events }));
+  console.log('voiceMode echo-gate OK');
+}
 
 
 // ── TTS: extractPlainText must never hand thinking to the synthesizer ──
