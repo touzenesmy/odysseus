@@ -15,6 +15,10 @@ from src.constants import TTS_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
+# Piper voice files are 10-60 MB; anything larger is almost certainly not
+# a voice (a mistyped link).
+_PIPER_VOICE_MAX_BYTES = 100 * 1024 * 1024
+
 
 def _safe_speed(value, default: float = 1.0) -> float:
     """Parse the stored tts_speed defensively. The settings layer tolerates
@@ -233,6 +237,105 @@ class TTSService:
                 "sample_rate": meta.get("sample_rate"),
             })
         return voices
+
+    # Piper voice download (settings UI) — source is either a bare voice
+    # name (resolved against the rhasspy HF repo) or a direct .onnx link.
+
+    @staticmethod
+    def _piper_voice_hf_url(name: str) -> str:
+        """HF resolve URL for a bare 'locale-name-quality' voice name."""
+        parts = name.split("-")
+        if len(parts) < 3 or not all(parts):
+            raise ValueError(
+                "use locale-name-quality, e.g. en_US-amy-medium, "
+                "or paste a direct .onnx link"
+            )
+        locale, name_part, quality = parts[0], parts[1], "-".join(parts[2:])
+        lang = locale.split("_")[0]
+        return (
+            "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+            f"{lang}/{locale}/{name_part}/{quality}/{name}.onnx"
+        )
+
+    def add_piper_voice(self, source: str) -> Dict[str, Any]:
+        """Download a Piper voice into the cache dir. Returns {name, size_mb}.
+        Raises ValueError with a user-facing message (the route maps it to 400).
+        The live /api/tts/voices scan picks the voice up immediately — no
+        service restart, no page reload (the settings UI refreshes the list)."""
+        source = source.strip()
+        if not source:
+            raise ValueError("paste a voice name or a .onnx link")
+        if "://" in source:
+            url = source
+            if not url.lower().startswith(("http://", "https://")):
+                raise ValueError("only http/https links are supported")
+            name = url.rsplit("/", 1)[-1].split("?")[0]
+            if not name.lower().endswith(".onnx"):
+                raise ValueError("the link must point to a .onnx file")
+            name = name[: -len(".onnx")]
+        else:
+            url = self._piper_voice_hf_url(source)
+            name = source
+        # Same name rule as _piper_voice_path (refuse anything path-shaped).
+        if "/" in name or "\\" in name or name.startswith((".", "~")):
+            raise ValueError(f"invalid voice name: {name!r}")
+        dest = self._piper_voice_dir() / f"{name}.onnx"
+        if dest.exists():
+            raise ValueError(f"voice {name!r} is already cached")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            size = self._download_piper_file(url, dest, _PIPER_VOICE_MAX_BYTES)
+        except ValueError:
+            dest.unlink(missing_ok=True)
+            raise
+        # PiperVoice.load REQUIRES the .onnx.json sidecar (piper 1.8 reads the
+        # config next to the model); without it the voice lists but cannot
+        # synthesize. Tolerate a 404 (some mirrors ship .onnx only) and flag it.
+        sidecar = dest.parent / (dest.name + ".json")
+        warning = None
+        try:
+            self._download_piper_file(url + ".json", sidecar, 1 << 20)
+        except ValueError as e:
+            sidecar.unlink(missing_ok=True)
+            if "not found" not in str(e):
+                dest.unlink(missing_ok=True)
+                raise
+            warning = ("voice metadata (.onnx.json) missing from the source — "
+                      "it will list but may not synthesize")
+        result = {"name": name, "size_mb": round(size / 1e6, 1)}
+        if warning:
+            result["warning"] = warning
+        return result
+
+    def _download_piper_file(self, url: str, dest: Path, max_bytes: int) -> int:
+        """Stream url to dest (via .part + atomic rename). Returns the byte
+        count. Raises ValueError (user-facing): 'not found' for a 404 so
+        callers can distinguish a missing optional file from a real failure."""
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        size = 0
+        try:
+            with httpx.stream("GET", url, follow_redirects=True,
+                              timeout=30.0) as r:
+                if r.status_code == 404:
+                    raise ValueError("not found")
+                r.raise_for_status()
+                with open(tmp, "wb") as f:
+                    for chunk in r.iter_bytes(chunk_size=1 << 16):
+                        size += len(chunk)
+                        if size > max_bytes:
+                            raise ValueError(
+                                f"file too large (limit {max_bytes // (1 << 20)} MB)")
+                        f.write(chunk)
+            if size == 0:
+                raise ValueError("download returned no data")
+            os.replace(tmp, dest)
+            return size
+        except ValueError:
+            tmp.unlink(missing_ok=True)
+            raise
+        except httpx.HTTPError as e:
+            tmp.unlink(missing_ok=True)
+            raise ValueError(f"download failed: {e}") from e
 
     def _synthesize_piper(self, text: str, voice: str, speed: float) -> Optional[bytes]:
         pv = self._get_piper_voice(voice)
