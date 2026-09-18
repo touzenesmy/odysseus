@@ -144,6 +144,21 @@ console.log('voiceMode phase3 OK');
     throw new Error('echo auto-sent: ' + JSON.stringify(events));
   if (!aborted) throw new Error('barge-in abort lost by echo gate');
 
+  // (1b) An EMPTY transcript (noise — the dominant echo class: 7 of 40 in
+  // the live journal) must ALSO consume the flag. If it doesn't, the flag
+  // leaks to the next real utterance and a short real barge-in right after
+  // an echo gets dropped (the pre-fix behavior).
+  input.value = ''; events.length = 0;
+  state.busy = true; state.ttsPlaying = true; state.processing = true;
+  vm._onMessage(JSON.stringify({ vad: 'start' }));   // echo onset → barge-in stops TTS
+  vm._onMessage(JSON.stringify({ transcript: '' }));  // empty echo must consume the flag
+  state.busy = false; state.ttsPlaying = false; state.processing = false;
+  vm._onMessage(JSON.stringify({ vad: 'start' }));   // real onset, TTS idle
+  vm._onMessage(JSON.stringify({ transcript: 'stop' }));
+  await tick();
+  if (!ev('submit', 'stop'))
+    throw new Error('short barge-in after an empty echo dropped: ' + JSON.stringify({ v: input.value, events }));
+
   // (2) onset DURING TTS → multi-word barge-in is KEPT (queued while busy)
   input.value = ''; events.length = 0;
   state.busy = true; state.ttsPlaying = true; state.processing = true;

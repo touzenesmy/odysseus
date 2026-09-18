@@ -131,6 +131,7 @@ class VoiceModeModule {
     this._starting = false;
     this.listening = false;
     this.transcribing = false;
+    this._onsetDuringTTS = false;  // a stale flag would misclassify the next session's first onset
     this._pending = [];
     const ws = this._ws;
     this._ws = null;
@@ -169,8 +170,12 @@ class VoiceModeModule {
     } else if (typeof data.transcript === 'string') {
       this.transcribing = false;
       this._updateBtn();
-      if (data.transcript) this._onTranscript(data.transcript);
-      // Empty transcript = the VAD segment was noise; stay quiet.
+      // Empty transcript = the VAD segment was noise; stay quiet. Still
+      // consumed by the echo gate though: a noise segment that STARTED while
+      // TTS was audible is an echo, and if its flag leaked to the next real
+      // utterance that one would be misclassified (a short real barge-in
+      // right after an echo would be dropped).
+      this._onTranscript(data.transcript || '');
     } else if (data.error) {
       showToast('Voice mode: ' + data.error.message, 5000);
       this._teardown();
@@ -227,8 +232,10 @@ class VoiceModeModule {
     // pending echo before its transcript arrives; it is consumed by the
     // first transcript after it.
     const wasTTS = this._onsetDuringTTS;
-    this._onsetDuringTTS = false;
-    if (wasTTS && text.trim().split(/\s+/).filter(Boolean).length <= 2) return;
+    this._onsetDuringTTS = false;  // consumed by the first transcript after the onset
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    if (wasTTS && words <= 2) return;  // empty + 1–2-word garbles are the echo class
+    if (!words) return;                // idle noise blip — nothing to do
     const cm = window.chatModule;
     const busy = (sid) => !!(cm && cm.hasActiveStream && sid && cm.hasActiveStream(sid));
     // Barge-in already happened at the VAD speech onset (_onMessage). The
