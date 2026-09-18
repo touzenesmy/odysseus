@@ -41,6 +41,25 @@ def setup_tts_routes(tts_service):
             logger.error(f"Failed to list Piper voices: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
+    class AddVoiceRequest(BaseModel):
+        # A bare voice name (resolved against the rhasspy HF repo) or a
+        # direct link to a .onnx file.
+        source: str
+
+    @router.post("/voices/add")
+    async def add_piper_voice(request: AddVoiceRequest):
+        """Download a Piper voice into the cache dir. The /api/tts/voices
+        live scan picks it up immediately — no restart, no page reload."""
+        try:
+            return await asyncio.to_thread(
+                tts_service.add_piper_voice, request.source
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail={"message": str(e)})
+        except Exception as e:
+            logger.error(f"Failed to download Piper voice: {e}")
+            raise HTTPException(status_code=500, detail={"message": str(e)})
+
     @router.post("/synthesize")
     async def synthesize_speech(request: TTSRequest):
         """Synthesize speech from text"""
