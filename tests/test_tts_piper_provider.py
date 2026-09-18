@@ -240,9 +240,10 @@ def test_routes_voices_and_voice_override(tmp_path, monkeypatch):
 class _FakeStreamResponse:
     """Mimics the httpx.stream(...) context manager used by add_piper_voice."""
 
-    def __init__(self, payload: bytes, status: int = 200):
+    def __init__(self, payload: bytes, status: int = 200, url=None):
         self._payload = payload
         self.status_code = status
+        self.url = url  # final URL (real httpx exposes it after redirects)
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -264,16 +265,19 @@ class _FakeStreamResponse:
 
 def _stub_httpx(monkeypatch, payload: bytes = b"data", status: int = 200,
                 routes=None):
-    """Stub httpx.stream. routes: list of (url_substring, payload, status)
-    matched in order; anything unmatched gets the default payload/status."""
+    """Stub httpx.stream. routes: list of (url_substring, payload, status,
+    final_url?) matched in order; anything unmatched gets the default
+    payload/status. final_url models the post-redirect location (the real
+    httpx exposes it as r.url); defaults to the requested URL (no redirect)."""
     calls = []
 
     def fake_stream(method, url, **kw):
         calls.append((method, url))
-        for sub, pl, st in (routes or []):
-            if sub in url:
-                return _FakeStreamResponse(pl, st)
-        return _FakeStreamResponse(payload, status)
+        for route in (routes or []):
+            if route[0] in url:
+                final = route[3] if len(route) > 3 else url
+                return _FakeStreamResponse(route[1], route[2], final)
+        return _FakeStreamResponse(payload, status, url)
 
     monkeypatch.setattr("services.tts.tts_service.httpx.stream", fake_stream)
     return calls
@@ -439,3 +443,62 @@ def test_route_voices_add_and_live_listing(tmp_path, monkeypatch):
     r = TestClient(app2).post("/api/tts/voices/add", json={"source": "junk"})
     assert r.status_code == 400
     assert r.json()["detail"]["message"] == "the link must point to a .onnx file"
+
+
+# ── SSRF / filename hardening (the pasted-link is a network boundary) ──
+
+@pytest.mark.parametrize("bad_url", [
+    "http://127.0.0.1:5000/voice.onnx",       # loopback
+    "http://192.168.1.5/voice.onnx",          # private LAN
+    "http://10.2.1.11/voice.onnx",            # WireGuard tunnel host
+    "http://[::1]/voice.onnx",                # IPv6 loopback
+    "http://169.254.169.254/latest/voice.onnx",  # cloud metadata (link-local)
+])
+def test_add_piper_voice_refuses_non_public_direct(tmp_path, monkeypatch, bad_url):
+    """A link that points straight at a non-public address is refused
+    before any connection — the server must not be a SSRF proxy."""
+    service = _make_service(tmp_path, [], monkeypatch)
+    calls = _stub_httpx(monkeypatch, b"data")
+    with pytest.raises(ValueError, match="non-public"):
+        service.add_piper_voice(bad_url)
+    assert calls == []  # refused pre-connection
+    assert list(service._piper_voice_dir().glob("*")) == []
+
+
+def test_add_piper_voice_refuses_redirect_to_non_public(tmp_path, monkeypatch):
+    """The real SSRF: a public URL that 302s to an internal host. The
+    final URL (post-redirect) is re-checked, so the hop is refused."""
+    service = _make_service(tmp_path, [], monkeypatch)
+    _stub_httpx(monkeypatch, routes=[
+        ("example.com", b"data", 200, "http://127.0.0.1:5000/secret.onnx"),
+    ])
+    with pytest.raises(ValueError, match="non-public"):
+        service.add_piper_voice("https://example.com/voice.onnx")
+    assert list(service._piper_voice_dir().glob("*")) == []
+
+
+def test_add_piper_voice_allows_public_ip_literal(tmp_path, monkeypatch):
+    """The guard must not over-block: a globally-routable IP literal is a
+    legitimate voice source (a mirror behind a fixed IP)."""
+    service = _make_service(tmp_path, [], monkeypatch)
+    _stub_httpx(monkeypatch, b"fake-onnx")
+    res = service.add_piper_voice("http://93.184.216.34/voice.onnx")
+    assert res["name"] == "voice"
+    assert (service._piper_voice_dir() / "voice.onnx").exists()
+
+
+@pytest.mark.parametrize("bad_name_src", [
+    "https://example.com/<img src=x onerror=alert(1)>.onnx",  # HTML injection
+    "https://example.com/voice%20name.onnx",                 # space in filename
+    "https://example.com/voice<script>.onnx",                # tag in filename
+])
+def test_add_piper_voice_name_charset_rejects_injection(tmp_path, monkeypatch, bad_name_src):
+    """The final path segment becomes a FILENAME and is rendered in the voice
+    dropdown — anything outside a plain charset is refused (no HTML/filename
+    injection), even though it is a .onnx link."""
+    service = _make_service(tmp_path, [], monkeypatch)
+    calls = _stub_httpx(monkeypatch, b"data")
+    with pytest.raises(ValueError, match="invalid voice name"):
+        service.add_piper_voice(bad_name_src)
+    assert calls == []
+    assert list(service._piper_voice_dir().glob("*")) == []
