@@ -3,13 +3,16 @@
 
 import io
 import os
+import re
 import json
 import wave
+import ipaddress
 import logging
 import hashlib
 import httpx
 from pathlib import Path
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 
 from src.constants import TTS_CACHE_DIR
 
@@ -276,8 +279,14 @@ class TTSService:
         else:
             url = self._piper_voice_hf_url(source)
             name = source
-        # Same name rule as _piper_voice_path (refuse anything path-shaped).
-        if "/" in name or "\\" in name or name.startswith((".", "~")):
+        # Same name rule as _piper_voice_path (refuse anything path-shaped),
+        # plus a charset check: the name becomes a FILENAME and is later
+        # rendered in the voice dropdown — reject anything that isn't a
+        # plain word so a malicious .onnx filename can't inject HTML or
+        # break the filesystem.
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+            raise ValueError(f"invalid voice name: {name!r}")
+        if name.startswith((".", "~")):
             raise ValueError(f"invalid voice name: {name!r}")
         dest = self._piper_voice_dir() / f"{name}.onnx"
         if dest.exists():
@@ -307,10 +316,36 @@ class TTSService:
             result["warning"] = warning
         return result
 
+    @staticmethod
+    def _assert_public_url(url: str):
+        """SSRF guard: the download must stay on the public internet. A
+        pasted link is trusted input only as far as the first hop — a
+        redirect can reach 127.0.0.1 or a LAN box, so the FINAL url
+        (after follow_redirects) is re-checked. Literal-IP hosts must be
+        globally routable; hostnames are allowed (DNS is resolved by
+        httpx, not here) — a hostname that rebinds to a private IP is a
+        documented residual, not a code path."""
+        host = urlparse(url).hostname or ""
+        try:
+            addr = ipaddress.ip_address(host)
+        except ValueError:
+            # Not a literal IP (a hostname). We can't resolve DNS here
+            # without a lookup that defeats the guard; hostnames are
+            # allowed (huggingface.co, GitHub mirrors) — the connection
+            # itself is the boundary, and the final-URL check catches
+            # redirects to literal IPs.
+            return
+        if not addr.is_global:
+            # is_global is False for loopback, private (10/8, 192.168/16,
+            # 172.16/12), link-local (169.254), and special-use ranges.
+            raise ValueError(f"refusing non-public address: {host}")
+
     def _download_piper_file(self, url: str, dest: Path, max_bytes: int) -> int:
         """Stream url to dest (via .part + atomic rename). Returns the byte
         count. Raises ValueError (user-facing): 'not found' for a 404 so
-        callers can distinguish a missing optional file from a real failure."""
+        callers can distinguish a missing optional file from a real failure.
+        Refuses non-public targets, including ones reached via redirect."""
+        self._assert_public_url(url)
         tmp = dest.with_suffix(dest.suffix + ".part")
         size = 0
         try:
@@ -319,6 +354,9 @@ class TTSService:
                 if r.status_code == 404:
                     raise ValueError("not found")
                 r.raise_for_status()
+                # Redirects (follow_redirects=True) are user-supplied
+                # input too — a 302 to an internal host is an SSRF.
+                self._assert_public_url(str(r.url))
                 with open(tmp, "wb") as f:
                     for chunk in r.iter_bytes(chunk_size=1 << 16):
                         size += len(chunk)
