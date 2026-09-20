@@ -2487,6 +2487,20 @@ def setup_chat_routes(
                     client_runtime_context = _parse_client_runtime_context(parsed_client_runtime_context)
             except Exception:
                 client_runtime_context = {}
+
+        chat_mode = str(form_data.get("mode", "")).lower()  # 'chat' | 'agent' | 'strict'
+        strict_chat = str(form_data.get("strict_chat") or (body or {}).get("strict_chat") or "").lower() == "true"
+        # Strict chat is conversation-only: pin to chat mode NOW — before any
+        # server-side escalation runs, and regardless of what the client sent
+        # (its own keyword escalation may already have produced mode=agent).
+        # The routing further down only reads chat_mode, so pinning here is
+        # sufficient and keeps the nested stream generator closure-safe.
+        if strict_chat:
+            chat_mode = "chat"
+        # Strict chat keeps its one capability usable: web search. The frontend
+        # doesn't send use_web for strict turns, so default it on.
+        if strict_chat and not (use_web or '').lower() == 'true':
+            use_web = 'true'
         tool_approval_id = (
             form_data.get("tool_approval_id")
             or (body or {}).get("tool_approval_id")
@@ -2505,7 +2519,7 @@ def setup_chat_routes(
             request, form_data.get("workspace") or form_data.get("cwd")
         )
         # Plan mode is a modifier on agent mode — it only makes sense with tools.
-        if plan_mode:
+        if plan_mode and not strict_chat:
             chat_mode = "agent"
         # An approved plan being EXECUTED: the frontend sends the checklist back
         # on each turn so we can pin it in context. This way a long plan on a
@@ -2887,7 +2901,8 @@ def setup_chat_routes(
                 auto_escalated = True
                 logger.info("chat→agent route ownership: clean v3 persisted endpoint")
             if (
-                chat_mode == "chat"
+                not strict_chat
+                and chat_mode == "chat"
                 and isinstance(message, str)
                 and (not _tool_intent or not _tool_intent.needs_tools)
                 and _is_contextual_web_followup(message, sess)
@@ -2902,7 +2917,8 @@ def setup_chat_routes(
                     _tool_intent.reason,
                 )
             _contextual_browser_turn_followup = bool(
-                isinstance(message, str)
+                not strict_chat
+                and isinstance(message, str)
                 and _is_contextual_browser_followup(message, sess)
             )
             if _contextual_browser_turn_followup:
@@ -2912,7 +2928,7 @@ def setup_chat_routes(
                     auto_escalated = True
                     _workspace_agent_intent = False
                     logger.info("chat→agent auto-escalation: contextual browser/form follow-up")
-            if not workspace and isinstance(message, str):
+            if not strict_chat and not workspace and isinstance(message, str):
                 _auto_workspace, _ = _resolve_workspace_from_message_path(request, message)
                 if _auto_workspace:
                     workspace = _auto_workspace
@@ -3026,6 +3042,7 @@ def setup_chat_routes(
             no_memory=no_memory,
             search_context=search_context,
             compare_mode=compare_mode,
+            strict_chat=strict_chat,
             webhook_manager=webhook_manager,
             use_enhanced_message=True,
             # Skills index only ships when the model can actually call
@@ -3481,9 +3498,15 @@ def setup_chat_routes(
             from src.tool_security import plan_mode_disabled_tools
             disabled_tools.update(plan_mode_disabled_tools())
 
+        # Strict chat: hard tool policy — everything except web_search/web_fetch,
+        # MCP off. (The chat path sends no tools anyway; this is the enforcement
+        # backstop if any agent path is ever reached for a strict turn.)
+        if strict_chat:
+            disabled_tools.update(strict_chat_disabled_tools())
         tool_policy = build_effective_tool_policy(
             disabled_tools=disabled_tools,
             last_user_message=message,
+            disable_mcp=strict_chat,
         )
         if str(_user or "").startswith("sft_"):
             logger.info(

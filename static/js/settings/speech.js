@@ -317,8 +317,7 @@ export async function initTtsSettings() {  var provSel = el('set-ttsProviderSele
       }
     });
   }
-
-
+}
 export async function initSttSettings() {
   var provSel = el('set-sttProviderSelect');
   var modelSelect = el('set-sttModelSelect');
