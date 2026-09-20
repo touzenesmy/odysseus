@@ -3019,12 +3019,6 @@ body.bg-pattern-sparkles {
     .mode-toggle.mode-toggle-three.mode-third::before {
       transform: translateX(200%);
     }
-    .mode-toggle.mode-toggle-three.mode-mid2::before {
-      transform: translateX(100%);
-    }
-    .mode-toggle.mode-toggle-three.mode-last::before {
-      transform: translateX(200%);
-    }
     #mode-agent-btn {
       border-radius: 10px 0 0 10px;
     }

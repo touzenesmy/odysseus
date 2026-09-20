@@ -1819,11 +1819,13 @@ function initializeEventListeners() {
     const state = loadToggleState();
     let currentMode = state.mode || 'chat';
 
-    // ?strict_chat=1 (e.g. deep-linked by the phone app) forces strict chat
-    // on load and keeps the user in it — the native app's "Chat mode" switch
-    // is what sets it, so don't persist it back into the shared toggle state.
+    // ?strict_chat=1 (deep-linked by the phone app's "Chat mode" switch)
+    // forces strict chat on load — unconditionally, so the phone always opens
+    // conversation-only regardless of the web UI's last-saved mode. It is an
+    // ephemeral per-launch override: don't persist it back into the shared
+    // toggle state (that would clobber the desktop preference).
     const strictUrl = new URLSearchParams(location.search).get('strict_chat') === '1';
-    if (strictUrl && currentMode !== 'agent') currentMode = 'strict';
+    if (strictUrl) currentMode = 'strict';
 
     // Immediately hide bash/docs buttons in non-agent modes on page load
     if (currentMode !== 'agent') {
@@ -1851,8 +1853,7 @@ function initializeEventListeners() {
       if (toggle) {
         toggle.classList.toggle('mode-chat', mode === 'chat');
         toggle.classList.toggle('mode-toggle-three', !!strictBtn);
-        toggle.classList.toggle('mode-mid2', mode === 'strict');
-        toggle.classList.remove('mode-mid', mode === 'strict');
+        toggle.classList.toggle('mode-third', mode === 'strict');
       }
       // Workspace pill + overflow entry are agent-only - hide immediately (no flash).
       try { workspaceModule.applyMode(mode); } catch (_) {}
@@ -1868,7 +1869,7 @@ function initializeEventListeners() {
     });
     chatBtn.addEventListener('click', () => setMode('chat'));
     if (strictBtn) strictBtn.addEventListener('click', () => setMode('strict'));
-	    setMode(currentMode, { persist: !strictUrl && currentMode === 'strict' });
+	    setMode(currentMode, { persist: !strictUrl });
 	  })();
 
   (function initPlanToggle() {
