@@ -2654,7 +2654,8 @@ import { invalidateSettings } from './appConfig.js';
 	      // personal-tool questions. Workspace intent can select Agent mode,
 	      // but shell authority still comes from the visible Bash toggle.
 	      const _explicitWorkspaceTarget = _directCodeFileTarget || /\b(?:bash|shell|terminal|tmux|pytest|git|docker|container|codebase|repo(?:sitory)?|stacktrace|traceback)\b/i.test(_messageText);
-	      const workspaceAgentIntent = !isIncognito && !_explanatoryQuestion && (_directCodingIntent || _explicitWorkspaceTarget);
+      const isStrictMode = (toggleState.mode || 'chat') === 'strict';
+	      const workspaceAgentIntent = !isStrictMode && !isIncognito && !_explanatoryQuestion && (_directCodingIntent || _explicitWorkspaceTarget);
 	      if (isPlanMode || _pendingApprovedPlan) {
 	        isAgentMode = true;
 	      }
@@ -2666,13 +2667,20 @@ import { invalidateSettings } from './appConfig.js';
 	      if (!isIncognito && !isAgentMode && documentModule && activeDocIdForSend) {
 	        isAgentMode = true;
 	      }
-	      fd.append('mode', isAgentMode ? 'agent' : 'chat');
+	      // Strict chat: conversation-only — no client auto-escalation, and the
+	      // server pins the turn to the no-tools chat path anyway (belt + suspenders).
+	      if (isStrictMode) {
+	        isAgentMode = false;
+	        isPlanMode = false;
+	      }
+	      fd.append('mode', isAgentMode ? 'agent' : (isStrictMode ? 'strict' : 'chat'));
+	      if (isStrictMode) fd.append('strict_chat', 'true');
 	      fd.append('plan_mode', isPlanMode ? 'true' : 'false');
 	      if (!isPlanMode && _pendingApprovedPlan) {
 	        fd.append('approved_plan', _pendingApprovedPlan.slice(0, 8192));
 	        _pendingApprovedPlan = '';
 	      }
-	      if (el('web-toggle').checked) {
+	      if (el('web-toggle').checked || isStrictMode) {
 	        if (!isAgentMode) {
 	          fd.append('use_web', 'true');
         }
