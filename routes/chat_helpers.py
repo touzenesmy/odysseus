@@ -639,6 +639,7 @@ async def build_chat_context(
     no_memory: bool = False,
     search_context: str = None,
     compare_mode: bool = False,
+    strict_chat: bool = False,
     webhook_manager=None,
     use_enhanced_message: bool = False,
     agent_mode: bool = False,
@@ -762,6 +763,11 @@ async def build_chat_context(
     if use_rag is not None or is_research_spinoff or casual_low_signal:
         _preface_kwargs["use_rag"] = use_rag_val
     preface, rag_sources, web_sources = chat_processor.build_context_preface(**_preface_kwargs)
+    if strict_chat:
+        # Conversation-only steering (user's "master prompt", as a static
+        # system message — no per-turn content, KV-cache safe).
+        from src.tool_policy import STRICT_CHAT_SYSTEM_NOTE
+        preface.append({"role": "system", "content": STRICT_CHAT_SYSTEM_NOTE})
 
     # Capture used memories immediately
     used_memories = getattr(chat_processor, '_last_used_memories', [])

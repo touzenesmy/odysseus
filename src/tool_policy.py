@@ -19,6 +19,33 @@ GUIDE_ONLY_DIRECTIVE = (
 WEB_TOOL_NAMES = frozenset({"web_search", "web_fetch"})
 
 
+# ── Strict chat (conversation-only) mode ─────────────────────────
+# "Chat" already calls the LLM with tools=None, but both the frontend
+# (workspace-intent keyword regex) and this backend (tool-intent / web
+# auto-escalation) can quietly promote a chat turn to agent mode, which is
+# what let shell-capable models try tools in chat. Strict chat makes the
+# conversation-only guarantee explicit and server-enforced: no auto-
+# escalation, and only web_search/web_fetch may be offered — ever.
+STRICT_CHAT_SYSTEM_NOTE = (
+    "You are in strict chat mode: conversation only. Do not attempt to run "
+    "commands, edit or create files, manage tasks or calendars, send email, "
+    "or otherwise act on the user's machine. You may use web search when it "
+    "helps answer. If the user asks for something that requires those tools, "
+    "explain that strict chat mode is conversation-only and suggest switching "
+    "to agent mode."
+)
+
+
+def strict_chat_disabled_tools() -> frozenset:
+    """Tools to deny in strict chat mode: everything except web_search/web_fetch.
+
+    Best-effort over the known tool universe (same source the agent loop
+    draws from), so newly added tools are covered without editing this set.
+    """
+    known = known_tool_names()
+    return frozenset(known - WEB_TOOL_NAMES)
+
+
 def tool_toggle_enabled(value: object) -> bool:
     """Return true only for explicit true-like tool toggle values."""
 
@@ -208,6 +235,7 @@ def build_effective_tool_policy(
     *,
     disabled_tools: Optional[Iterable[str]] = None,
     last_user_message: object = "",
+    disable_mcp: bool = False,
 ) -> ToolPolicy:
     """Compose the effective policy for one agent turn.
 
@@ -239,4 +267,5 @@ def build_effective_tool_policy(
         disabled_tools=frozenset(disabled),
         hidden_tools=frozenset(hidden),
         reasons=MappingProxyType(dict(reasons)),
+        disable_mcp=disable_mcp,
     )

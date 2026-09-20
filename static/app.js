@@ -1810,38 +1810,54 @@ function initializeEventListeners() {
     });
   }
 
-	  // ── Agent / Chat mode toggle ──
+	  // ── Agent / Chat / Strict mode toggle ──
 	  (function initModeToggle() {
     const agentBtn = el('mode-agent-btn');
     const chatBtn = el('mode-chat-btn');
+    const strictBtn = el('mode-strict-btn');
     if (!agentBtn || !chatBtn) return;
     const state = loadToggleState();
     let currentMode = state.mode || 'chat';
 
-    // Immediately hide bash button in chat mode on page load
-    if (currentMode === 'chat') {
+    // ?strict_chat=1 (e.g. deep-linked by the phone app) forces strict chat
+    // on load and keeps the user in it — the native app's "Chat mode" switch
+    // is what sets it, so don't persist it back into the shared toggle state.
+    const strictUrl = new URLSearchParams(location.search).get('strict_chat') === '1';
+    if (strictUrl && currentMode !== 'agent') currentMode = 'strict';
+
+    // Immediately hide bash/docs buttons in non-agent modes on page load
+    if (currentMode !== 'agent') {
       const bashBtn = el('bash-toggle-btn');
       if (bashBtn) bashBtn.style.display = 'none';
       const docsBtn = el('docs-toggle-btn');
       if (docsBtn) docsBtn.style.display = 'none';
     }
 
-    function setMode(mode) {
+    function setMode(mode, { persist = true } = {}) {
       currentMode = mode;
-      const st = loadToggleState();
-      st.mode = mode;
-      saveToggleState(st);
+      if (persist) {
+        const st = loadToggleState();
+        st.mode = mode;
+        saveToggleState(st);
+      }
       agentBtn.classList.toggle('active', mode === 'agent');
       chatBtn.classList.toggle('active', mode === 'chat');
+      if (strictBtn) strictBtn.classList.toggle('active', mode === 'strict');
       agentBtn.setAttribute('aria-pressed', String(mode === 'agent'));
       chatBtn.setAttribute('aria-pressed', String(mode === 'chat'));
+      if (strictBtn) strictBtn.setAttribute('aria-pressed', String(mode === 'strict'));
       // Slide the pill to the active button
       const toggle = agentBtn.closest('.mode-toggle');
-      if (toggle) toggle.classList.toggle('mode-chat', mode === 'chat');
+      if (toggle) {
+        toggle.classList.toggle('mode-chat', mode === 'chat');
+        toggle.classList.toggle('mode-toggle-three', !!strictBtn);
+        toggle.classList.toggle('mode-mid2', mode === 'strict');
+        toggle.classList.remove('mode-mid', mode === 'strict');
+      }
       // Workspace pill + overflow entry are agent-only - hide immediately (no flash).
       try { workspaceModule.applyMode(mode); } catch (_) {}
       // Delay tool glow-up for a staggered effect
-      setTimeout(() => applyModeToToggles(mode), 500);
+      setTimeout(() => applyModeToToggles(mode === 'strict' ? 'chat' : mode), 500);
     }
     window.__odysseusSetChatMode = setMode;
     agentBtn.addEventListener('click', () => {
@@ -1851,7 +1867,8 @@ function initializeEventListeners() {
       setMode('agent');
     });
     chatBtn.addEventListener('click', () => setMode('chat'));
-	    setMode(currentMode);
+    if (strictBtn) strictBtn.addEventListener('click', () => setMode('strict'));
+	    setMode(currentMode, { persist: !strictUrl && currentMode === 'strict' });
 	  })();
 
   (function initPlanToggle() {

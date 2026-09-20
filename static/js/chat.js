@@ -1907,8 +1907,9 @@ import { loadPanel } from './panels.js';
 	      const toggleState = Storage.loadToggleState();
 	      const isPlanMode = !!toggleState.plan_mode && !(el('research-toggle') && el('research-toggle').checked);
 	      let isAgentMode = (toggleState.mode || 'chat') === 'agent';
+      const isStrictMode = (toggleState.mode || 'chat') === 'strict';
       const isIncognito = isIncognitoForSend;
-	      const workspaceAgentIntent = !isIncognito && /\b(fix|debug|implement|change|update|refactor|patch|review|test|run|execute|start|launch|build|lint|typecheck|benchmark|eval|terminal[- ]bench|tbench|repo|repository|codebase|project|app|server|api|frontend|backend|bug|issue|pr|file|folder|directory|source|logs?|trace|stacktrace|traceback|docker|container|tmux|terminal|shell|git|branch|commit|diff|pytest|process|port|endpoint|computer|machine|laptop|device|system)\b/i.test(String(msg || ''));
+	      const workspaceAgentIntent = !isStrictMode && !isIncognito && /\b(fix|debug|implement|change|update|refactor|patch|review|test|run|execute|start|launch|build|lint|typecheck|benchmark|eval|terminal[- ]bench|tbench|repo|repository|codebase|project|app|server|api|frontend|backend|bug|issue|pr|file|folder|directory|source|logs?|trace|stacktrace|traceback|docker|container|tmux|terminal|shell|git|branch|commit|diff|pytest|process|port|endpoint|computer|machine|laptop|device|system)\b/i.test(String(msg || ''));
 	      if (isPlanMode || _pendingApprovedPlan) {
 	        isAgentMode = true;
 	      }
@@ -1920,13 +1921,20 @@ import { loadPanel } from './panels.js';
 	      if (!isIncognito && !isAgentMode && documentModule && activeDocIdForSend) {
 	        isAgentMode = true;
 	      }
-	      fd.append('mode', isAgentMode ? 'agent' : 'chat');
+	      // Strict chat: conversation-only — no client auto-escalation, and the
+	      // server pins the turn to the no-tools chat path anyway (belt + suspenders).
+	      if (isStrictMode) {
+	        isAgentMode = false;
+	        isPlanMode = false;
+	      }
+	      fd.append('mode', isAgentMode ? 'agent' : (isStrictMode ? 'strict' : 'chat'));
+	      if (isStrictMode) fd.append('strict_chat', 'true');
 	      fd.append('plan_mode', isPlanMode ? 'true' : 'false');
 	      if (!isPlanMode && _pendingApprovedPlan) {
 	        fd.append('approved_plan', _pendingApprovedPlan.slice(0, 8192));
 	        _pendingApprovedPlan = '';
 	      }
-	      if (el('web-toggle').checked) {
+	      if (el('web-toggle').checked || isStrictMode) {
 	        if (!isAgentMode) {
 	          fd.append('use_web', 'true');
         }
