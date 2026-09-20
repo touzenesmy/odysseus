@@ -132,7 +132,7 @@ def test_ui_has_strict_button_and_toggle_state():
     assert 'id="mode-strict-btn"' in html
     js = _APP_JS.read_text(encoding="utf-8")
     assert "mode-strict-btn" in js
-    assert "currentMode !== 'agent'" in js  # strict-url default
+    assert "if (strictUrl) currentMode = 'strict';" in js  # phone override wins
     chat_js = _CHAT_JS.read_text(encoding="utf-8")
     assert "const isStrictMode = (toggleState.mode || 'chat') === 'strict';" in chat_js
     assert "fd.append('strict_chat', 'true');" in chat_js
