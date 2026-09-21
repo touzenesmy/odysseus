@@ -29,15 +29,18 @@ ROOT = Path(__file__).resolve().parent.parent
 ENGINE_FILE = ROOT / "scripts" / "searxng_engines" / "flaresolverr_engines.py"
 SETTINGS_TEMPLATE = ROOT / "config" / "searxng" / "settings.yml"
 CONTAINER_ENGINE_PATH = "/usr/local/searxng/searx/engines/flaresolverr_engines.py"
-COMPOSE_FILES = (
-    ROOT / "docker-compose.yml",
-    ROOT / "docker-compose.gpu-amd.yml",
-    ROOT / "docker-compose.gpu-nvidia.yml",
-)
-# Host-specific baremetal stack (gitignored; may not exist on every host). When
-# present, it must carry the same engine mount so the fix survives a stack
-# switch.
-BAREMETAL_COMPOSE = ROOT / "docker-compose-baremetal.samy"
+# Every compose file at the repo root, matched by name pattern — tracked or
+# host-specific (a gitignored baremetal variant may live here too). Anything
+# that defines a searxng service must mount the engine module, so a stack
+# switch can't silently kill ddgfs/bravefs/bingfs.
+def _root_compose_files():
+    return sorted(
+        f
+        for f in ROOT.iterdir()
+        if f.is_file()
+        and "docker-compose" in f.name
+        and f.suffix in (".yml", ".yaml")
+    )
 CUSTOM_ENGINES = ("ddgfs", "bravefs", "bingfs")
 STOCK_ENGINES = ("duckduckgo", "brave", "startpage", "bing")
 
@@ -68,39 +71,40 @@ def test_engine_module_exposes_required_hooks_and_sites():
         )
 
 
-def test_compose_bind_mounts_engine_module():
-    for compose in COMPOSE_FILES:
-        text = compose.read_text(encoding="utf-8")
+def test_every_compose_file_mounts_engine_module():
+    files = _root_compose_files()
+    assert files, "expected at least docker-compose.yml at the repo root"
+    checked = []
+    for path in files:
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            continue  # not plain YAML — nothing to check here
+        services = (doc or {}).get("services") or {}
+        if "searxng" not in services:
+            continue  # no searxng service in this file — not our concern
+        checked.append(path.name)
+        text = path.read_text(encoding="utf-8")
         assert CONTAINER_ENGINE_PATH in text, (
-            f"{compose.name} does not mount the custom engine module into "
+            f"{path.name} does not mount the custom engine module into "
             f"{CONTAINER_ENGINE_PATH}; the engines vanish on container recreate"
         )
         assert "SEARXNG_CUSTOM_ENGINES_PATH" in text, (
-            f"{compose.name} must mount the engine via the overridable "
+            f"{path.name} must mount the engine via the overridable "
             "SEARXNG_CUSTOM_ENGINES_PATH variable"
         )
         # The default path must be the tracked scripts location, not gitignored ./data.
         default_mount = re.search(
             r"\$\{SEARXNG_CUSTOM_ENGINES_PATH:-([^}]+)\}", text
         )
-        assert default_mount, f"{compose.name}: mount default not found"
-        default_path = default_mount.group(1)
-        assert default_path.startswith("./scripts/"), (
-            f"{compose.name} engine default must live under tracked ./scripts/, "
-            f"got {default_path!r} (./data is gitignored and would not be versioned)"
+        assert default_mount, f"{path.name}: mount default not found"
+        assert default_mount.group(1).startswith("./scripts/"), (
+            f"{path.name} engine default must live under tracked ./scripts/, "
+            f"got {default_mount.group(1)!r} (./data is gitignored and would not be versioned)"
         )
-
-
-def test_baremetal_compose_also_mounts_engine_if_present():
-    if not BAREMETAL_COMPOSE.is_file():
-        return  # host-specific file; other hosts run the docker-compose.yml stack
-    text = BAREMETAL_COMPOSE.read_text(encoding="utf-8")
-    assert CONTAINER_ENGINE_PATH in text, (
-        f"{BAREMETAL_COMPOSE.name} must also mount the engine module — on "
-        "this host searxng runs from this file, so a missing mount silently "
-        "kills ddgfs/bravefs/bingfs"
+    assert "docker-compose.yml" in checked, (
+        "the shipped docker-compose.yml stack must be present and checked"
     )
-    assert "SEARXNG_CUSTOM_ENGINES_PATH" in text
 
 
 def _template_engines():
