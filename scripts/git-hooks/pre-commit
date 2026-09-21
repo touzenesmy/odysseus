@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Pre-commit guard — blocks personal data from ever entering the repo, even
+# via `git add -f`. .gitignore already hides these paths; this is the second
+# line of defense (and the one that catches force-adds).
+#
+# Install once:  git config core.hooksPath scripts/git-hooks
+# (repo-local setting; run from the repo root)
+#
+# Rules (keep in sync with .gitignore and tests/test_no_private_data_tracked.py):
+#   - top-level personal data: data/, services/data/, research_data/,
+#     skills/, memory/
+#   - env files: .env* (except *.example)
+#   - credential-looking basenames: secrets.*, *.pem, *.key, *.p12, *.pfx,
+#     id_rsa*, and backup files *.bak / *.bak.*
+#
+# Deliberately NOT blocked: tracked source that merely mentions secrets
+# (src/secret_storage.py, .github/workflows/secret-scan.yml), services/memory/
+# (application code, not user memories), and services/hwfit/data/
+# (un-ignored via .gitignore — intentionally tracked).
+set -euo pipefail
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+blocked=""
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    data/*|services/data/*|research_data/*|skills/*|memory/*)
+      blocked="$blocked $f"
+      continue
+      ;;
+  esac
+  base="$(basename "$f")"
+  case "$base" in
+    .env|.env.*)
+      case "$base" in
+        *.example) ;;
+        *) blocked="$blocked $f" ;;
+      esac
+      continue
+      ;;
+    secrets.*|*.pem|*.key|*.p12|*.pfx|id_rsa*|*.bak|*.bak.*)
+      blocked="$blocked $f"
+      continue
+      ;;
+  esac
+done <<< "$staged"
+
+if [ -n "$blocked" ]; then
+  echo "COMMIT BLOCKED — staged paths look like personal data (see .gitignore):" >&2
+  echo "$blocked" | sed 's/^/  /' >&2
+  echo "Unstage them with: git restore --staged <path>" >&2
+  exit 1
+fi
