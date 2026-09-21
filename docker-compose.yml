@@ -125,8 +125,15 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - searxng-data:/etc/searxng
-      - ./config/searxng/settings.yml:/tmp/searxng-settings.yml.template:ro,z
+      - ${SEARXNG_SETTINGS_TEMPLATE_PATH:-./config/searxng/settings.yml}:/tmp/searxng-settings.yml.template:ro,z
       - ./scripts/migrate_searxng_settings.py:/tmp/migrate-searxng-settings.py:ro,z
+      # Custom FlareSolverr-backed engines (ddg/brave/bing) — survives container
+      # recreate. Tracked under ./scripts (not ./data, which is gitignored) so the
+      # engine file is version-controlled with the compose config. The path is
+      # overridable for hosts whose flaresolverr URL/engines differ; the compose
+      # settings register ddgfs/bravefs/bingfs, and a host without flaresolverr
+      # can disable them via SEARXNG_EXTRA_ENGINES=off (see config/searxng/settings.yml).
+      - ${SEARXNG_CUSTOM_ENGINES_PATH:-./scripts/searxng_engines/flaresolverr_engines.py}:/usr/local/searxng/searx/engines/flaresolverr_engines.py:ro,z
     environment:
       - SEARXNG_BASE_URL=http://localhost:8080/
       - SEARXNG_SECRET=${SEARXNG_SECRET:-}
