@@ -7,3 +7,39 @@ search:
   formats:
     - html
     - json
+
+engines:
+  # Custom FlareSolverr-backed engines (ddg/brave/bing). These route each query
+  # through a FlareSolverr browser (real headless Chrome) to bypass IP/CAPTCHA
+  # blocks that kill the stock engines on some hosts. They are DISABLED by
+  # default because they need a reachable FlareSolverr instance. Enable them by
+  # setting flaresolverr_url to your instance and flipping disabled to false —
+  # or, on a host that keeps settings in a named volume, by overriding them
+  # there. The engine module file is bind-mounted in docker-compose.yml
+  # (SEARXNG_CUSTOM_ENGINES_PATH -> scripts/searxng_engines/flaresolverr_engines.py).
+  - name: ddgfs
+    engine: flaresolverr_engines
+    site: ddg
+    flaresolverr_url: http://odysseus-flaresolverr:8191/v1
+    shortcut: ddgx
+    timeout: 35.0
+    enable_http: true
+    disabled: true
+
+  - name: bravefs
+    engine: flaresolverr_engines
+    site: brave
+    flaresolverr_url: http://odysseus-flaresolverr:8191/v1
+    shortcut: brx
+    timeout: 35.0
+    enable_http: true
+    disabled: true
+
+  - name: bingfs
+    engine: flaresolverr_engines
+    site: bing
+    flaresolverr_url: http://odysseus-flaresolverr:8191/v1
+    shortcut: bix
+    timeout: 35.0
+    enable_http: true
+    disabled: true
