@@ -1,6 +1,6 @@
 # Search
 
-Last updated: dev@e71f8ce | 2026-08-25
+Last updated: dev@3b6c1691 | 2026-09-20
 
 ## Scope
 
@@ -125,6 +125,8 @@ Deep research wraps fetched webpage content through `untrusted_context_message("
 ## Optional And Platform Behavior
 
 `ddgs` is optional; provider code has an HTML fallback. Search cache and analytics state live under the shared data dir and mkdir failures in read-only image layers are tolerated where possible. PDF extraction uses `pdfminer.six` only when installed. Native SearXNG defaults to `http://localhost:8080`; Docker uses the compose `searxng` service URL and pins the SearXNG image with a healthcheck.
+
+The compose `searxng` service also supports optional FlareSolverr-backed custom engines (`ddgfs`/`bravefs`/`bingfs`) for hosts whose outbound IP is CAPTCHA/429-blocked by the stock engines. The engine module `scripts/searxng_engines/flaresolverr_engines.py` is tracked and bind-mounted into the container engine dir via `SEARXNG_CUSTOM_ENGINES_PATH` (default `./scripts/searxng_engines/flaresolverr_engines.py`); the settings template `config/searxng/settings.yml` (mounted via `SEARXNG_SETTINGS_TEMPLATE_PATH`) registers the three engines but keeps them `disabled: true` (opt-in) and leaves stock engines enabled so unaffected installs are unchanged. Enabling them is per-host, in the retained `searxng-data` volume `settings.yml`, and requires a reachable FlareSolverr. `tests/test_searxng_flaresolverr_engines.py` pins the mount, the tracked path, and the opt-in registration.
 
 Compose preserves retained SearXNG settings but runs `scripts/migrate_searxng_settings.py` before startup to add missing `use_default_settings: true` inheritance. The migration accepts only a regular single-document YAML mapping, preserves BOM/newline/style/ownership/mode, writes and directory-fsyncs atomically, and no-ops when the key exists. Compose treats migration failure as non-fatal so SearXNG health reports the retained-file problem instead of the wrapper command preventing startup.
 
