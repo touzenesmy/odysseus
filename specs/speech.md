@@ -106,6 +106,16 @@ Route behavior:
   refused, not rendered.
   Bad sources return 400 with a user-facing message. The `GET /api/tts/voices`
   live scan picks a new voice up immediately — no restart, no page reload;
+- `POST /api/tts/voices/delete` deletes a cached Piper voice (body
+  `{name}`, the flat name exactly as listed). It unlinks the `.onnx` plus
+  the `.onnx.json` sidecar, drops the in-memory model, and — only when the
+  deleted voice was the active one — re-selects the first remaining voice
+  (or disables the piper provider when none are left) and persists that
+  choice; the response reports
+  `active_voice_replaced_with` (the new name, or `null` when the provider
+  was disabled). Unknown or path-shaped names 404 with a user-facing
+  message; a vanished file mid-flight also 404s (idempotent delete);
+  the `GET /api/tts/voices` live scan reflects it immediately, same as add;
 - binary responses choose WAV or MP3 MIME by audio magic bytes;
 - synthesis input is passed to the service as submitted and capped there;
 - malformed or nonpositive `tts_speed` falls back to `1.0`;
