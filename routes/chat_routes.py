@@ -2743,7 +2743,12 @@ def setup_chat_routes(
             )
             or _native_context_has_workspace_inputs(client_runtime_context)
         )
-        if chat_mode == "chat" and _tool_intent and _tool_intent.needs_tools:
+        # Strict chat: conversation-only, no auto-escalation, ever. The
+        # parse-time pin keeps chat_mode at "chat" — exactly the condition
+        # these branches key off — so each branch must check strict_chat
+        # itself (journal 2026-09-22: a strict turn escalated via the search
+        # branch because strict defaults use_web on).
+        if not strict_chat and chat_mode == "chat" and _tool_intent and _tool_intent.needs_tools:
             chat_mode = "agent"
             auto_escalated = True
             if _workspace_agent_intent:
@@ -2753,11 +2758,11 @@ def setup_chat_routes(
                 _tool_intent.category,
                 _tool_intent.reason,
             )
-        elif chat_mode == "chat" and _search_enabled:
+        elif not strict_chat and chat_mode == "chat" and _search_enabled:
             chat_mode = "agent"
             auto_escalated = True
             logger.info("chat→agent auto-escalation: search enabled")
-        elif chat_mode == "chat" and _explicit_web_intent:
+        elif not strict_chat and chat_mode == "chat" and _explicit_web_intent:
             chat_mode = "agent"
             auto_escalated = True
             logger.info("chat→agent auto-escalation: explicit web intent")

@@ -143,6 +143,42 @@ def test_ui_has_strict_button_and_toggle_state():
     assert "el('web-toggle').checked || isStrictMode" in chat_js
 
 
+def test_strict_blocks_tool_intent_escalation():
+    """The tool-intent/search/web escalation branches key off chat_mode ==
+    "chat" — exactly what the strict pin sets — so each must check
+    strict_chat itself (journal 2026-09-22: a strict turn escalated via the
+    search branch because strict defaults use_web on)."""
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'if not strict_chat and chat_mode == "chat" and _tool_intent and _tool_intent.needs_tools:' in source
+    assert 'elif not strict_chat and chat_mode == "chat" and _search_enabled:' in source
+    assert 'elif not strict_chat and chat_mode == "chat" and _explicit_web_intent:' in source
+
+
+def test_strict_mcp_gate_in_agent_loop():
+    """MCP blocks must be rejected in the loop: the execution layer
+    re-resolves the MCP manager per call, so the loop's mcp_mgr=None is not
+    enforced there (journal 2026-09-22: strict turn executed
+    mcp__builtin_browser__browser_navigate)."""
+    source = (Path(__file__).resolve().parent.parent / "src" / "agent_loop.py").read_text(encoding="utf-8")
+    assert "blocked_by_mcp_policy" in source
+    assert 'block.tool_type.startswith("mcp__")' in source
+
+
+def test_strict_mcp_gate_in_tool_execution():
+    """Defense in depth: the execution layer itself refuses MCP calls when
+    the turn policy disables MCP."""
+    source = (Path(__file__).resolve().parent.parent / "src" / "tool_execution.py").read_text(encoding="utf-8")
+    assert 'block.tool_type.startswith("mcp__")' in source
+    assert "MCP tools are disabled for this request." in source
+
+
+def test_ui_overflow_mirrors_follow_mode_hidden_buttons():
+    js = _APP_JS.read_text(encoding="utf-8")
+    assert "function hideModeHiddenMirrors()" in js
+    assert "document.dispatchEvent(new CustomEvent('odysseus-mode-change'));" in js
+    assert "document.addEventListener('odysseus-mode-change'" in js
+
+
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-q"]))
