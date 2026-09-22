@@ -241,6 +241,42 @@ class TTSService:
             })
         return voices
 
+    def remove_piper_voice(self, name: str) -> Dict[str, Any]:
+        """Delete a cached Piper voice (.onnx + .onnx.json sidecar).
+
+        If the deleted voice was the active one, the active voice is
+        re-selected (first remaining voice; provider disabled if none left)
+        so TTS can't keep pointing at a dead file. The live
+        /api/tts/voices scan picks up the deletion immediately — no
+        restart, no page reload.
+        """
+        path = self._piper_voice_path(name)
+        if path is None:
+            raise ValueError(f"voice {name!r} not found")
+        sidecar = path.parent / (path.name + ".json")
+        try:
+            path.unlink()
+        except OSError as e:
+            raise ValueError(f"could not delete {name!r}: {e}") from e
+        sidecar.unlink(missing_ok=True)
+        # Drop the in-memory model (same process), so a reload of the
+        # name never resurrects the deleted file.
+        self._piper_voices.pop(name, None)
+        result: Dict[str, Any] = {"name": name, "deleted": True}
+        settings = self._load_settings()
+        if settings.get("tts_provider") == "piper" and \
+                settings.get("tts_voice") == name:
+            from src.settings import load_settings, save_settings
+            remaining = [v["name"] for v in self.list_piper_voices()]
+            new_voice = remaining[0] if remaining else ""
+            saved = load_settings()
+            saved["tts_voice"] = new_voice
+            if not new_voice:
+                saved["tts_provider"] = "disabled"
+            save_settings(saved)
+            result["active_voice_replaced_with"] = new_voice or None
+        return result
+
     # Piper voice download (settings UI) — source is either a bare voice
     # name (resolved against the rhasspy HF repo) or a direct .onnx link.
 
