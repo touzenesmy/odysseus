@@ -60,6 +60,26 @@ def setup_tts_routes(tts_service):
             logger.error(f"Failed to download Piper voice: {e}")
             raise HTTPException(status_code=500, detail={"message": str(e)})
 
+    class DeleteVoiceRequest(BaseModel):
+        # The flat voice name exactly as listed by GET /api/tts/voices.
+        name: str
+
+    @router.post("/voices/delete")
+    async def delete_piper_voice(request: DeleteVoiceRequest):
+        """Delete a cached Piper voice (.onnx + sidecar). If it was the
+        active voice, the active one is re-selected (first remaining, or
+        the piper provider is disabled) — the response reports the change.
+        The /api/tts/voices live scan reflects it immediately."""
+        try:
+            return await asyncio.to_thread(
+                tts_service.remove_piper_voice, request.name
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail={"message": str(e)})
+        except Exception as e:
+            logger.error(f"Failed to delete Piper voice: {e}")
+            raise HTTPException(status_code=500, detail={"message": str(e)})
+
     @router.post("/synthesize")
     async def synthesize_speech(request: TTSRequest):
         """Synthesize speech from text"""

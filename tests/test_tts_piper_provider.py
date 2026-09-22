@@ -502,3 +502,88 @@ def test_add_piper_voice_name_charset_rejects_injection(tmp_path, monkeypatch, b
         service.add_piper_voice(bad_name_src)
     assert calls == []
     assert list(service._piper_voice_dir().glob("*")) == []
+
+
+# ── voice deletion (remove_piper_voice) ──
+
+def _patch_settings(monkeypatch, provider, active_voice):
+    """Point src.settings at an in-memory dict (the delete path imports
+    load_settings/save_settings at call time, so attribute patching works)."""
+    import src.settings as s
+    state = {"tts_provider": provider, "tts_voice": active_voice,
+             "tts_enabled": True, "tts_model": "piper", "tts_speed": "1"}
+    saved = []
+    monkeypatch.setattr(s, "load_settings", lambda: dict(state))
+    monkeypatch.setattr(s, "save_settings",
+                        lambda d: (state.update(d), saved.append(dict(d)))[1])
+    return state, saved
+
+
+def test_remove_piper_voice_deletes_files_and_model(tmp_path, monkeypatch):
+    service = _make_service(tmp_path, ["en_US-a-medium", "fr_FR-b-medium"],
+                            monkeypatch)
+    sidecar = service._piper_voice_dir() / "en_US-a-medium.onnx.json"
+    sidecar.write_text("{}")
+    service._piper_voices["en_US-a-medium"] = "loaded-model"
+    state, saved = _patch_settings(monkeypatch, "piper", "fr_FR-b-medium")
+    monkeypatch.setattr(service, "_load_settings", lambda: dict(state))
+
+    res = service.remove_piper_voice("en_US-a-medium")
+
+    assert res == {"name": "en_US-a-medium", "deleted": True}
+    d = service._piper_voice_dir()
+    assert not (d / "en_US-a-medium.onnx").exists()
+    assert not sidecar.exists()
+    assert (d / "fr_FR-b-medium.onnx").exists()  # other voices untouched
+    assert "en_US-a-medium" not in service._piper_voices
+    assert saved == []  # active voice was NOT deleted → settings untouched
+
+
+def test_remove_piper_voice_reselects_active(tmp_path, monkeypatch):
+    service = _make_service(tmp_path, ["en_US-a-medium", "en_US-b-medium"],
+                            monkeypatch)
+    state, saved = _patch_settings(monkeypatch, "piper", "en_US-a-medium")
+    monkeypatch.setattr(service, "_load_settings", lambda: dict(state))
+
+    res = service.remove_piper_voice("en_US-a-medium")
+
+    assert res["active_voice_replaced_with"] == "en_US-b-medium"
+    assert state["tts_voice"] == "en_US-b-medium"
+    assert state["tts_provider"] == "piper"
+    assert len(saved) == 1
+    assert saved[0]["tts_voice"] == "en_US-b-medium"
+
+
+def test_remove_piper_voice_last_voice_disables_provider(tmp_path, monkeypatch):
+    service = _make_service(tmp_path, ["en_US-a-medium"], monkeypatch)
+    state, saved = _patch_settings(monkeypatch, "piper", "en_US-a-medium")
+    monkeypatch.setattr(service, "_load_settings", lambda: dict(state))
+
+    res = service.remove_piper_voice("en_US-a-medium")
+
+    assert res["active_voice_replaced_with"] is None
+    assert state["tts_provider"] == "disabled"
+    assert state["tts_voice"] == ""
+    assert saved[0]["tts_provider"] == "disabled"
+
+
+def test_remove_piper_voice_unknown_raises(tmp_path, monkeypatch):
+    service = _make_service(tmp_path, ["en_US-a-medium"], monkeypatch)
+    state, saved = _patch_settings(monkeypatch, "piper", "en_US-a-medium")
+    monkeypatch.setattr(service, "_load_settings", lambda: dict(state))
+
+    with pytest.raises(ValueError, match="not found"):
+        service.remove_piper_voice("en_US-zzz-medium")
+    assert saved == []
+    # Path-shaped names are refused by the resolver, same as add.
+    with pytest.raises(ValueError, match="not found"):
+        service.remove_piper_voice("../etc/passwd")
+
+
+def test_remove_piper_voice_path_shaped_names(tmp_path, monkeypatch):
+    service = _make_service(tmp_path, ["en_US-a-medium"], monkeypatch)
+    state, _ = _patch_settings(monkeypatch, "piper", "en_US-a-medium")
+    monkeypatch.setattr(service, "_load_settings", lambda: dict(state))
+    for bad in ("", "a/b.onnx", "/abs/onnx", "en_US-a-medium.onnx"):
+        with pytest.raises(ValueError):
+            service.remove_piper_voice(bad)

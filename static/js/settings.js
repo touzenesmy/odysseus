@@ -761,6 +761,7 @@ async function initTtsSettings() {
   var piperVoiceSelect = el('set-ttsPiperVoiceSelect');
   var piperVoiceRow = el('set-ttsPiperVoiceRow');
   var piperAuditionBtn = el('set-ttsPiperAuditionBtn');
+  var piperDeleteBtn = el('set-ttsPiperDeleteBtn');
   var piperAddBtn = el('set-ttsPiperAddBtn');
   var piperAddRow = el('set-ttsPiperAddRow');
   var piperAddInput = el('set-ttsPiperAddInput');
@@ -991,6 +992,55 @@ async function initTtsSettings() {
   if (piperAddInput) {
     piperAddInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') downloadPiperVoice();
+    });
+  }
+
+  // Piper voice delete — removes the SELECTED voice from the server cache
+  // (.onnx + sidecar). If it was the active voice, the server re-selects the
+  // first remaining one (or disables piper when none are left); the UI then
+  // follows and persists via the normal save path.
+  if (piperDeleteBtn && piperVoiceSelect) {
+    piperDeleteBtn.addEventListener('click', async function() {
+      var name = piperVoiceSelect.value;
+      if (!name) {
+        ttsMsg.textContent = 'No Piper voice selected to delete'; ttsMsg.style.color = 'var(--red, #e55)';
+        setTimeout(function() { ttsMsg.textContent = ''; }, 2500); return;
+      }
+      if (!window.confirm('Delete voice "' + name + '"?\nThis removes it from the server.')) return;
+      piperDeleteBtn.disabled = true;
+      ttsMsg.textContent = 'Deleting ' + name + ' \u2026'; ttsMsg.style.color = 'var(--fg)';
+      try {
+        var res = await fetch('/api/tts/voices/delete', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name })
+        });
+        var data = await res.json().catch(function() { return {}; });
+        if (!res.ok) {
+          var detail = (data && data.detail) || {};
+          throw new Error(detail.message || detail || ('Delete failed (' + res.status + ')'));
+        }
+        await loadPiperVoices();
+        if (data.active_voice_replaced_with !== undefined) {
+          // The deleted voice was active: the server already re-selected.
+          // Follow it in the UI and persist (idempotent — same values).
+          if (data.active_voice_replaced_with) {
+            piperVoiceSelect.value = data.active_voice_replaced_with;
+            settings.tts_voice = data.active_voice_replaced_with;
+          } else {
+            provSel.value = 'disabled';
+            updateVisibility();
+            settings.tts_provider = 'disabled';
+            settings.tts_voice = '';
+          }
+        }
+        await saveTTS();
+        ttsMsg.textContent = 'Deleted ' + name; ttsMsg.style.color = 'var(--green, #50fa7b)';
+      } catch (e) {
+        ttsMsg.textContent = 'Delete failed: ' + e.message; ttsMsg.style.color = 'var(--red, #e55)';
+      } finally {
+        piperDeleteBtn.disabled = false;
+      }
     });
   }
 
