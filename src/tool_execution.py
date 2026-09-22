@@ -842,6 +842,27 @@ async def execute_tool_block(
             "NO_TOOL_SECURITY_CONTEXT"
         )
 
+    # Policy backstop (defense in depth): MCP is off for this turn. The
+    # agent loop drops its own mcp_mgr, but this layer re-resolves the MCP
+    # manager per call, so a model-hallucinated MCP name from context could
+    # otherwise execute (journal 2026-09-22: strict turn ran
+    # mcp__builtin_browser__browser_navigate).
+    if (
+        tool_policy is not None
+        and getattr(tool_policy, "disable_mcp", False)
+        and isinstance(getattr(block, "tool_type", None), str)
+        and block.tool_type.startswith("mcp__")
+    ):
+        return (
+            f"{block.tool_type}: BLOCKED",
+            {
+                "error": "MCP tools are disabled for this request.",
+                "exit_code": 1,
+                "blocked": True,
+                "policy": "current_tool_policy",
+            },
+        )
+
     approval_claimed = False
     if exact_approval is not None:
         if (

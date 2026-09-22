@@ -1808,6 +1808,9 @@ function initializeEventListeners() {
       btn.classList.toggle('active', on);
       if (checkboxId) { const chk = el(checkboxId); if (chk) chk.checked = on; }
     });
+    // Buttons the mode hides (chat/strict hide bash/docs) must not keep
+    // live mirrors in the overflow menu — let the overflow module re-sync.
+    document.dispatchEvent(new CustomEvent('odysseus-mode-change'));
   }
 
 	  // ── Agent / Chat / Strict mode toggle ──
@@ -2318,6 +2321,15 @@ function initializeEventListeners() {
       updatePlusDot();
     }
 
+    // Mirrors of buttons the current mode hides (chat/strict hide bash/
+    // docs) must never stay live in the overflow menu.
+    function hideModeHiddenMirrors() {
+      overflowMirrors.forEach((mirror, btnId) => {
+        const b = el(btnId);
+        if (b && b.style.display === 'none') mirror.style.display = 'none';
+      });
+    }
+
     function checkToolbarOverflow() {
       const inputBottom = inputLeft.parentElement;
       if (!inputBottom) return;
@@ -2363,6 +2375,7 @@ function initializeEventListeners() {
           const mirror = overflowMirrors.get(btn.id);
           if (mirror) mirror.style.display = '';
         });
+        hideModeHiddenMirrors();
         inputLeft.style.overflow = prevOverflow;
         inputLeft.style.flexWrap = '';
         syncMirrorStates();
@@ -2378,6 +2391,7 @@ function initializeEventListeners() {
           totalWidth -= btnWidths[i];
           if (totalWidth <= available) break;
         }
+        hideModeHiddenMirrors();
       }
 
       // Restore
@@ -2394,6 +2408,10 @@ function initializeEventListeners() {
 
     // Run on resize and on load
     window.addEventListener('resize', () => requestAnimationFrame(checkToolbarOverflow));
+    // Mode changes hide/show buttons (chat/strict hide bash/docs) — re-sync
+    // the overflow menu immediately, not only on the next resize.
+    document.addEventListener('odysseus-mode-change', () =>
+      requestAnimationFrame(checkToolbarOverflow));
     // Run immediately (state is already restored by this point)
     checkToolbarOverflow();
     // Re-check when sidebar toggles (changes available width)

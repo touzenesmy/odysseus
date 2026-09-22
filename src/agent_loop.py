@@ -5656,14 +5656,33 @@ async def stream_agent_loop(
                 tool_policy
                 and any(tool_policy.blocks(name) for name in policy_names)
             )
+            # MCP blocks are gated by the policy flag, not by name: the
+            # execution layer (execute_tool_block) re-resolves the MCP
+            # manager per call, so the mcp_mgr=None dropped above never
+            # reaches it. Reject MCP calls here, before approval/execution.
+            blocked_by_mcp_policy = bool(
+                tool_policy
+                and tool_policy.disable_mcp
+                and isinstance(block.tool_type, str)
+                and block.tool_type.startswith("mcp__")
+            )
             blocked_by_disabled_tools = bool(
                 disabled_tools and not policy_names.isdisjoint(disabled_tools)
             )
             if (
-                (blocked_by_tool_policy or blocked_by_disabled_tools)
+                (
+                    blocked_by_tool_policy
+                    or blocked_by_mcp_policy
+                    or blocked_by_disabled_tools
+                )
                 and not _ody_clamped_tool_allowed
             ):
-                if blocked_by_tool_policy:
+                if blocked_by_mcp_policy:
+                    reason = (
+                        "MCP tools are disabled for this turn "
+                        "(strict chat mode is conversation-only)."
+                    )
+                elif blocked_by_tool_policy:
                     blocked_name = next(
                         name for name in policy_names if tool_policy.blocks(name)
                     )
