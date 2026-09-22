@@ -112,6 +112,7 @@ class VoiceModeModule {
       this.active = true;
       this.listening = ws.readyState === WebSocket.OPEN;
       this._updateBtn();
+      this._notifyNative(true);
       showToast('Voice mode on — just talk, it types for you');
     } catch (e) {
       console.error('Voice mode start failed:', e);
@@ -133,6 +134,7 @@ class VoiceModeModule {
     this.transcribing = false;
     this._onsetDuringTTS = false;  // a stale flag would misclassify the next session's first onset
     this._pending = [];
+    this._notifyNative(false);
     const ws = this._ws;
     this._ws = null;
     if (ws) { try { ws.onclose = null; ws.close(); } catch (_) {} }
@@ -275,6 +277,16 @@ class VoiceModeModule {
     input.value = existing ? existing + ' ' + text : text;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.focus();
+  }
+
+  /* Native host bridge (Android app only): tells the host when a voice
+     conversation is active so it can keep the screen on (FLAG_KEEP_SCREEN_ON).
+     Absent in desktop browsers — the whole call is guarded. */
+  _notifyNative(active) {
+    try {
+      const host = window.OdysseusApp;
+      if (host && typeof host.setVoiceActive === 'function') host.setVoiceActive(!!active);
+    } catch (_) {}
   }
 
   _updateBtn() {
