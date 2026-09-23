@@ -96,6 +96,15 @@ vm._onMessage(JSON.stringify({ vad: 'start' }));
 if (ttsStopped !== 1 || !ev('abort', true))
   throw new Error('onset barge-in wrong: ' + JSON.stringify({ ttsStopped, events }));
 
+// 2c. Onset while the assistant is SILENT (turn streaming text, TTS not
+// audible) → NO abort. A noise blip or a TTS-echo onset must never kill a
+// turn the user didn't interrupt (live journal 2026-09-23: phantom onsets
+// aborted 3/3 phone turns — "Cancelled by user" with zero user action).
+events.length = 0; ttsStopped = 0; state.busy = true; state.ttsPlaying = false; state.processing = false;
+vm._onMessage(JSON.stringify({ vad: 'start' }));
+if (ttsStopped !== 0 || events.some(e => e[0] === 'abort'))
+  throw new Error('silent-onset must not abort: ' + JSON.stringify(events));
+
 // 2b. The transcript arrives after the onset (VAD tail + STT) → just queue.
 // (Phase 3.7: a barge-in transcript during TTS must be substantive — ≤2 words
 // in that window are the echo class, dropped by the gate in _onTranscript.)

@@ -206,11 +206,22 @@ class VoiceModeModule {
 
   _bargeIn() {
     // Fired on every VAD speech onset — including the ones that end up as
-    // noise blips (dropped at the silence tail). That is the point: silence
-    // the assistant the instant the user starts talking, without waiting
-    // for the transcript (which arrives 0.5–2 s later).
+    // noise blips (dropped at the silence tail). Silencing the TTS on any
+    // onset stays deliberate: a real barge-in must cut the assistant
+    // instantly, and the echo gate drops the blip's transcript later.
+    // ABORTING THE IN-FLIGHT TURN is NOT: a noise blip (or the mic hearing
+    // the TTS itself) must never kill a turn the user didn't interrupt —
+    // the live journal showed phantom onsets aborting every turn in the
+    // first phone test ("Cancelled by user" ×3, no user action). The abort
+    // now fires only when the assistant's voice was audible at the onset:
+    // that is when a real user barge-in is the plausible explanation. If
+    // the turn was already streaming text (TTS not audible), a later
+    // substantive transcript still carries the user's words into the
+    // queue — the turn dies only when the user actually barges in.
     const tts = window.aiTTSManager;
-    if (tts && (tts.isPlaying || tts._processing)) tts.stop();
+    const wasAudible = !!(tts && (tts.isPlaying || tts._processing));
+    if (wasAudible) tts.stop();
+    if (!wasAudible) return;
     const cm = window.chatModule;
     const sid = this._sid();
     if (cm && cm.hasActiveStream && sid && cm.hasActiveStream(sid)) {
