@@ -2576,6 +2576,14 @@ import { invalidateSettings } from './appConfig.js';
 	      const toggleState = Storage.loadToggleState();
 	      const isPlanMode = !!toggleState.plan_mode && !(el('research-toggle') && el('research-toggle').checked);
 	      let isAgentMode = (toggleState.mode || 'chat') === 'agent';
+	      // ?strict_chat=1 (deep-linked by the phone app's "Chat mode" switch) is
+	      // an EPHEMERAL override: initModeToggle applies it to its own UI state
+	      // but deliberately does NOT persist it to the shared toggle storage
+	      // (that would clobber the desktop preference). The send path must
+	      // honor the URL param the same way — otherwise the phone silently
+	      // sends the shared last mode (often 'agent') and the server runs a
+	      // full agent turn with tools, defeating strict mode entirely.
+	      const _strictUrl = new URLSearchParams(location.search).get('strict_chat') === '1';
 	      const isIncognito = isIncognitoForSend;
 	      const _messageText = String(msg || '');
 	      const _explanatoryQuestion = /^\s*(?:how\s+(?:do|can)\s+i|can\s+you\s+explain|what\s+about|tell\s+me\s+how|show\s+me\s+how)\b/i.test(_messageText);
@@ -2586,7 +2594,7 @@ import { invalidateSettings } from './appConfig.js';
 	      // personal-tool questions. Workspace intent can select Agent mode,
 	      // but shell authority still comes from the visible Bash toggle.
 	      const _explicitWorkspaceTarget = _directCodeFileTarget || /\b(?:bash|shell|terminal|tmux|pytest|git|docker|container|codebase|repo(?:sitory)?|stacktrace|traceback)\b/i.test(_messageText);
-      const isStrictMode = (toggleState.mode || 'chat') === 'strict';
+	      const isStrictMode = _strictUrl || (toggleState.mode || 'chat') === 'strict';
 	      const workspaceAgentIntent = !isStrictMode && !isIncognito && !_explanatoryQuestion && (_directCodingIntent || _explicitWorkspaceTarget);
 	      if (isPlanMode || _pendingApprovedPlan) {
 	        isAgentMode = true;
