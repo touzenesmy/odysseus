@@ -134,7 +134,13 @@ def test_ui_has_strict_button_and_toggle_state():
     assert "mode-strict-btn" in js
     assert "if (strictUrl) currentMode = 'strict';" in js  # phone override wins
     chat_js = _CHAT_JS.read_text(encoding="utf-8")
-    assert "const isStrictMode = (toggleState.mode || 'chat') === 'strict';" in chat_js
+    # The send path must honor the ?strict_chat=1 deep link the same way
+    # initModeToggle does — the phone's override is ephemeral (not persisted
+    # to toggle storage), so the URL param is the only signal at send time.
+    # Journal 2026-09-23: the phone sent its shared 'agent' mode for a
+    # strict session, so the server ran full agent turns with bash + browser.
+    assert "const _strictUrl = new URLSearchParams(location.search).get('strict_chat') === '1';" in chat_js
+    assert "const isStrictMode = _strictUrl || (toggleState.mode || 'chat') === 'strict';" in chat_js
     assert "fd.append('strict_chat', 'true');" in chat_js
     assert "isAgentMode ? 'agent' : (isStrictMode ? 'strict' : 'chat')" in chat_js
     # client-side escalations suppressed in strict mode
