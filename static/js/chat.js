@@ -6203,7 +6203,29 @@ import { invalidateSettings } from './appConfig.js';
         cache: 'no-store',
       });
       if (!_getForegroundStreamState() || _backgroundStreams.has(sid)) return;
-      if (res.status !== 404) return;
+      if (res.status !== 404) {
+        // Server run still active: the local reader froze (e.g. the phone
+        // locked mid-generation) but the run is still generating DETACHED
+        // server-side. Aborting here rendered "[Cancelled by user]" on turns
+        // the user wanted to keep going (2026-09-24 voice→lock incident).
+        // Drop the frozen local state and reattach via the replay+live
+        // resume endpoint, replacing the frozen holder so the user sees one
+        // live bubble, not a stale spinner plus the replayed stream.
+        console.warn('[stream-watchdog] Server run still active — reattaching via /api/chat/resume');
+        _activeStreams.delete(sid);
+        _syncForegroundStreamGlobals();
+        _sendInFlight = false;
+        if (_webLockRelease) {
+          _webLockRelease();
+          _webLockRelease = null;
+        }
+        const submitBtn = document.querySelector('.send-btn');
+        if (submitBtn) updateSubmitButton('idle', submitBtn);
+        const messageInput = uiModule.el('message');
+        if (messageInput) messageInput.disabled = false;
+        resumeStream(sid, active.holder || null);
+        return;
+      }
       // Prefill guard (d691f57c, re-anchored on the new watchdog): if no first
       // token has arrived, a 404 is ambiguous (stream may have been reaped
       // mid-prefill) — don't abort a stream that never produced output here.
@@ -6991,6 +7013,33 @@ import { invalidateSettings } from './appConfig.js';
         console.warn('[tab-recovery] Server status probe failed:', err);
       });
     });
+
+    // Abort a locally-frozen stream with the given reason (recovery paths
+    // that confirmed the run is dead server-side).
+    function _abortFrozenLocalStream(active, reason) {
+      console.warn('[tab-recovery] Stream confirmed dead. Aborting and reloading session.');
+      if (active && active.abortCtrl) {
+        active.abortCtrl._reason = reason;
+        active.abortCtrl.abort();
+      }
+      try {
+        const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
+        if (sid) _activeStreams.delete(sid);
+      } catch (_) {}
+      _syncForegroundStreamGlobals();
+
+      // Release Web Lock
+      if (_webLockRelease) {
+        _webLockRelease();
+        _webLockRelease = null;
+      }
+
+      // Reset UI state
+      var _submitBtn = document.getElementById('submit');
+      updateSubmitButton('idle', _submitBtn);
+      var _msgInput = document.getElementById('message');
+      if (_msgInput) _msgInput.disabled = false;
+    }
 
     // On mobile, fade out welcome text when keyboard opens to prevent overlap
     if (window.innerWidth <= 768) {
