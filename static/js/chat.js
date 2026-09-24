@@ -5599,32 +5599,74 @@ import { loadPanel } from './panels.js';
         const stillStale = Date.now() - (stillActive.lastActivity || _lastReaderActivity);
         if (stillStale < 5000) return; // Came back to life
 
-        console.warn('[tab-recovery] Stream confirmed dead. Aborting and reloading session.');
+        const sid = sessionModule && sessionModule.getCurrentSessionId
+          && sessionModule.getCurrentSessionId();
+        if (!sid) return;
 
-        // Abort the frozen stream, but preserve the visible bubble.
-        if (stillActive.abortCtrl) {
-          stillActive.abortCtrl._reason = 'recovery';
-          stillActive.abortCtrl.abort();
-        }
-        try {
-          const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
-          if (sid) _activeStreams.delete(sid);
-        } catch (_) {}
-        _syncForegroundStreamGlobals();
-
-        // Release Web Lock
-        if (_webLockRelease) {
-          _webLockRelease();
-          _webLockRelease = null;
-        }
-
-        // Reset UI state
-        var _submitBtn = document.getElementById('submit');
-        updateSubmitButton('idle', _submitBtn);
-        var _msgInput = document.getElementById('message');
-        if (_msgInput) _msgInput.disabled = false;
+        // Ask the server before killing the local stream: the tab may have
+        // gone inactive because the phone locked (or the tab froze) while
+        // the run is still generating DETACHED on the server. Aborting here
+        // rendered "[Cancelled by user]" on turns the user wanted to keep
+        // going (2026-09-24 voice→lock incident). Only abort when the
+        // server confirms the run is gone; otherwise reattach via the
+        // replay+live resume endpoint.
+        fetch(`${API_BASE}/api/chat/stream_status/${encodeURIComponent(sid)}`, {
+          credentials: 'same-origin',
+          cache: 'no-store',
+        }).then(res => {
+          if (!res.ok) { // 404 → no active run server-side: it really is dead
+            _abortFrozenLocalStream(stillActive, 'recovery');
+            return;
+          }
+          console.warn('[tab-recovery] Server run still active — reattaching via /api/chat/resume');
+          try { _activeStreams.delete(sid); } catch (_) {}
+          _syncForegroundStreamGlobals();
+          _sendInFlight = false;
+          if (_webLockRelease) {
+            _webLockRelease();
+            _webLockRelease = null;
+          }
+          const _submitBtn = document.getElementById('submit');
+          updateSubmitButton('idle', _submitBtn);
+          const _msgInput = document.getElementById('message');
+          if (_msgInput) _msgInput.disabled = false;
+          // Replace the frozen holder so the user sees one live bubble,
+          // not a stale spinner plus the replayed stream.
+          resumeStream(sid, stillActive.holder || null);
+        }).catch(() => {
+          // Network dead — can't verify the run. Keep the historical
+          // behavior rather than killing a possibly-live turn.
+          _abortFrozenLocalStream(stillActive, 'recovery');
+        });
       }, 2000); // 2 second grace period
     });
+
+    // Abort a locally-frozen stream with the given reason (recovery paths
+    // that confirmed the run is dead server-side).
+    function _abortFrozenLocalStream(active, reason) {
+      console.warn('[tab-recovery] Stream confirmed dead. Aborting and reloading session.');
+      if (active && active.abortCtrl) {
+        active.abortCtrl._reason = reason;
+        active.abortCtrl.abort();
+      }
+      try {
+        const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
+        if (sid) _activeStreams.delete(sid);
+      } catch (_) {}
+      _syncForegroundStreamGlobals();
+
+      // Release Web Lock
+      if (_webLockRelease) {
+        _webLockRelease();
+        _webLockRelease = null;
+      }
+
+      // Reset UI state
+      var _submitBtn = document.getElementById('submit');
+      updateSubmitButton('idle', _submitBtn);
+      var _msgInput = document.getElementById('message');
+      if (_msgInput) _msgInput.disabled = false;
+    }
 
     // On mobile, fade out welcome text when keyboard opens to prevent overlap
     if (window.innerWidth <= 768) {
