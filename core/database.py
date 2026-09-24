@@ -72,11 +72,48 @@ def _normalize_sqlite_url(url: str) -> str:
 # Get database URL from environment, default to SQLite in DATA_DIR
 DATABASE_URL = _normalize_sqlite_url(os.getenv("DATABASE_URL", _default_database_url()))
 
+# SQLite writers queue (busy_timeout) instead of failing instantly when a
+# connection holds a lock, and readers never block writers (WAL) — the
+# default rollback-journal mode made one abandoned session with an open
+# transaction take down every other write in the process (2026-09-23: a
+# leaked transaction held the write lock for ~3 h; heartbeats, task
+# scheduling and chat persistence all failed until a manual restart).
+_SQLITE_BUSY_TIMEOUT_MS = 30000
+
+
+def _sqlite_connect_args(url: str) -> dict:
+    if "sqlite" not in url:
+        return {}
+    return {"check_same_thread": False}
+
+
+def _sqlite_is_memory(url: str) -> bool:
+    try:
+        parsed = make_url(url)
+    except Exception:
+        return False
+    db = parsed.database or ""
+    return db == ":memory:" or "mode=memory" in url
+
+
 # Create engine
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+    connect_args=_sqlite_connect_args(DATABASE_URL),
 )
+
+if "sqlite" in DATABASE_URL and not _sqlite_is_memory(DATABASE_URL):
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_concurrency(dbapi_connection, connection_record):
+        # WAL: readers never block writers, writers never block readers.
+        # busy_timeout: writers queue up to 30 s instead of failing instantly
+        # (default was 0 → instant "database is locked").
+        cur = dbapi_connection.cursor()
+        try:
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+        finally:
+            cur.close()
 
 
 # Sidecar files SQLite can create next to the main DB. -journal is the default
