@@ -1907,7 +1907,15 @@ import { loadPanel } from './panels.js';
 	      const toggleState = Storage.loadToggleState();
 	      const isPlanMode = !!toggleState.plan_mode && !(el('research-toggle') && el('research-toggle').checked);
 	      let isAgentMode = (toggleState.mode || 'chat') === 'agent';
-      const isStrictMode = (toggleState.mode || 'chat') === 'strict';
+      // ?strict_chat=1 (deep-linked by the phone app's "Chat mode" switch) is
+      // an EPHEMERAL override: initModeToggle applies it to its own UI state
+      // but deliberately does NOT persist it to the shared toggle storage
+      // (that would clobber the desktop preference). The send path must
+      // honor the URL param the same way — otherwise the phone silently
+      // sends the shared last mode (often 'agent') and the server runs a
+      // full agent turn with tools, defeating strict mode entirely.
+      const _strictUrl = new URLSearchParams(location.search).get('strict_chat') === '1';
+      const isStrictMode = _strictUrl || (toggleState.mode || 'chat') === 'strict';
       const isIncognito = isIncognitoForSend;
 	      const workspaceAgentIntent = !isStrictMode && !isIncognito && /\b(fix|debug|implement|change|update|refactor|patch|review|test|run|execute|start|launch|build|lint|typecheck|benchmark|eval|terminal[- ]bench|tbench|repo|repository|codebase|project|app|server|api|frontend|backend|bug|issue|pr|file|folder|directory|source|logs?|trace|stacktrace|traceback|docker|container|tmux|terminal|shell|git|branch|commit|diff|pytest|process|port|endpoint|computer|machine|laptop|device|system)\b/i.test(String(msg || ''));
 	      if (isPlanMode || _pendingApprovedPlan) {
