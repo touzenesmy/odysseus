@@ -83,6 +83,17 @@ def test_build_ical_includes_rrule():
     assert "RRULE:FREQ=WEEKLY" in ical
 
 
+def test_build_ical_includes_recurrence_exdates():
+    # Regression: build_event_ical used datetime.strptime but only imported
+    # `timezone` from datetime — the NameError was swallowed by the surrounding
+    # try/except, so exdates were silently dropped from recurring events.
+    ical = build_event_ical(_ev(
+        rrule="FREQ=WEEKLY;BYDAY=MO",
+        recurrence_exdates=["2026-06-17T14:00", "2026-06-24T14:00"],
+    ))
+    assert "EXDATE" in ical, "exdates must serialize to EXDATE properties"
+
+
 def test_find_remote_calendar_matches_by_hash():
     cals = [FakeCalendar("https://other/x/"), FakeCalendar(REMOTE_URL)]
     found = find_remote_calendar(cals, CAL_ID)
