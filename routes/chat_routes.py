@@ -72,6 +72,7 @@ from src.tool_policy import (
     WEB_TOOL_NAMES,
     build_effective_tool_policy,
     is_web_search_explicitly_denied,
+    strict_chat_disabled_tools,
     web_search_enabled_for_turn,
 )
 from src.tool_approvals import tool_approval_store
