@@ -2574,7 +2574,7 @@ import { invalidateSettings } from './appConfig.js';
       // on; explicit web/current-info requests are handled by the backend
 	      // intent gate.
 	      const toggleState = Storage.loadToggleState();
-	      const isPlanMode = !!toggleState.plan_mode && !(el('research-toggle') && el('research-toggle').checked);
+	      let isPlanMode = !!toggleState.plan_mode && !(el('research-toggle') && el('research-toggle').checked);
 	      let isAgentMode = (toggleState.mode || 'chat') === 'agent';
 	      // ?strict_chat=1 (deep-linked by the phone app's "Chat mode" switch) is
 	      // an EPHEMERAL override: initModeToggle applies it to its own UI state

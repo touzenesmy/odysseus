@@ -67,6 +67,36 @@ def test_strict_note_is_static_and_conversation_framed():
     assert "agent mode" in STRICT_CHAT_SYSTEM_NOTE.lower()
 
 
+# ── Regression guards (2026-09-25: strict sends died silently) ──
+
+
+def test_strict_helper_is_imported_in_chat_routes():
+    """Regression (2026-09-25): chat_routes.py called strict_chat_disabled_tools()
+    without importing it — every strict turn 500'd with NameError. The helper is
+    defined in src/tool_policy.py, so the import block must name it."""
+    src = _CHAT_ROUTES.read_text(encoding="utf-8")
+    i0 = src.find("from src.tool_policy import (")
+    assert i0 != -1, "tool_policy import block missing"
+    i1 = src.find(")", i0)
+    block = src[i0:i1]
+    assert "strict_chat_disabled_tools" in block, (
+        "strict_chat_disabled_tools is called at the strict policy site but not "
+        "imported — strict turns would NameError at runtime"
+    )
+
+
+def test_chat_js_isPlanMode_is_not_const():
+    """Regression (2026-09-25): the strict block assigns isPlanMode = false, but
+    the declaration was const — handleChatSubmit threw TypeError
+    'Assignment to constant variable' for EVERY strict send (silent, no POST).
+    The declaration must be let."""
+    src = _CHAT_JS.read_text(encoding="utf-8")
+    assert "let isPlanMode = !!toggleState.plan_mode" in src, (
+        "isPlanMode must be declared let — the strict block reassigns it"
+    )
+    assert "const isPlanMode" not in src
+
+
 # ── Source-level guards: server ───────────────────────────────
 
 
