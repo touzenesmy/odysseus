@@ -1382,6 +1382,47 @@ async def _tool_approval_resolution_stream(decision: str) -> AsyncGenerator[str,
     yield "data: [DONE]\n\n"
 
 
+async def _sse_keepalive(agen, interval: float = 30.0) -> AsyncGenerator[str, None]:
+    """Re-emit SSE comment heartbeats whenever an upstream generator idles > interval.
+
+    Proxies (NPM/nginx default 60s proxy_read_timeout) sever *silent* SSE
+    streams. The research/image paths already emit their own heartbeats; the
+    main stream_llm_with_fallback / stream_agent_loop paths did not, so long
+    model-thinking gaps (>60s) killed the connection server-side. Comment
+    lines (": heartbeat\n\n") are ignored by every SSE consumer in the client.
+
+    A persistent pump task + asyncio.Queue keeps the upstream generator's
+    __anext__() pending ACROSS idle periods — a timeout here must never cancel
+    the in-flight model request (asyncio.wait_for on __anext__ would).
+    """
+    q: "asyncio.Queue[object]" = asyncio.Queue()
+    _DONE = object()
+
+    async def _pump() -> None:
+        try:
+            while True:
+                await q.put(await agen.__anext__())
+        except StopAsyncIteration:
+            await q.put(_DONE)
+        except BaseException as e:
+            await q.put(e)
+
+    pump = asyncio.create_task(_pump())
+    try:
+        while True:
+            try:
+                item = await asyncio.wait_for(q.get(), timeout=interval)
+            except asyncio.TimeoutError:
+                yield ": heartbeat\n\n"
+                continue
+            if item is _DONE:
+                return
+            if isinstance(item, BaseException):
+                raise item
+            yield item
+    finally:
+        if not pump.done():
+            await pump.cancel()
 def _chat_candidate_request_factory(
     messages,
     fallback_context_length: int = 0,
@@ -4231,7 +4272,7 @@ def setup_chat_routes(
 
                 # ── Chat mode: call stream_llm directly, NO tools, NO document access ──
                 try:
-                    async for chunk in stream_llm_with_fallback(
+                    async for chunk in _sse_keepalive(stream_llm_with_fallback(
                         _foreground_candidates,
                         messages,
                         temperature=(temperature_override if temperature_override is not None else 1.0),
@@ -4250,7 +4291,7 @@ def setup_chat_routes(
                         candidate_route_descriptors=_foreground_route_descriptors,
                         thinking_mode=thinking_mode,
                         reasoning_effort=reasoning_effort,
-                    ):
+                    )):
                         if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
                             try:
                                 data = json.loads(chunk[6:])
@@ -4669,7 +4710,7 @@ def setup_chat_routes(
                             _forced_tools = set()
                         _forced_tools.update(DOCUMENT_TOOL_NAMES)
 
-                    async for chunk in _stream_agent_with_execution_bridge(
+                    async for chunk in _sse_keepalive(_stream_agent_with_execution_bridge(
                         _external_execution_bridge(client_runtime_context),
                         sess.endpoint_url,
                         sess.model,
@@ -4717,7 +4758,7 @@ def setup_chat_routes(
                         context_resolution=(
                             _compact_context_resolution if _clean_v3_preview else None
                         ),
-                    ):
+                    )):
                         if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
                             try:
                                 data = _render_state.consume(json.loads(chunk[6:]))
