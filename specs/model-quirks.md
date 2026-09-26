@@ -1,6 +1,6 @@
 # Model Behavior Observations
 
-Last updated: dev@2e2bb52 | 2026-08-16
+Last updated: dev@161ba0a4 | 2026-09-26
 
 ## Scope
 
@@ -37,6 +37,7 @@ regex, prose, or serialized-prompt parsing in the canonical layer.
 | --- | --- | --- | --- |
 | Moonshot Kimi K2.5/K2.6 fixed temperature | official Moonshot, K2.5/K2.6, OpenAI Chat | omit `temperature`; thinking mode owns its fixed value | #3960, `f5d3e509`; implemented in current runtime |
 | Moonshot reasoning tool history | same provider/models/dialect | preserve assistant `reasoning_content` across tool continuation | #3118, `2e6fff22`; implemented |
+| Moonshot rejects empty assistant content | official Moonshot, OpenAI Chat | an assistant message with empty `content` is rejected with `HTTP 400: ... role 'assistant' must not be empty`; unlike OpenAI/DeepSeek/local backends which tolerate it | 2026-09-26 fork fix `161ba0a4` (empty "Cancelled" placeholders poisoned the whole conversation); handled by filtering empty assistant turns out of the outbound context in `Session.get_context_messages()` and `_sanitize_tool_messages()`, not by model-name matching |
 | Claude Opus 4.7+ sampling omission | Anthropic Messages, Opus 4.7+ and major-only later IDs such as `claude-opus-5` | omit `temperature`, `top_p`, and `top_k` where the runtime rule applies | #3117, `4f48cfa9`, #5761; implemented through current runtime identity logic |
 | Mistral structured reasoning | reasoning-capable Mistral model through native/compatible response shape | use graded effort where accepted; keep typed thinking separate from text | #4698, `bd9149f7`, provider docs; partly implemented |
 | Ollama native reasoning control | selected reasoning model/deployment | native `think`; reasoning in `message.thinking`/`thinking` | #3031 and provider docs; deployment scoped |

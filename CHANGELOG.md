@@ -4,6 +4,50 @@ Human-readable summary of notable changes to this fork. The git commit history r
 the authoritative record; this file exists so "what changed and when" is readable
 without `git log`.
 
+## 2026-09-26 — Empty "Cancelled" assistant turns no longer poison strict providers (Moonshot/Kimi)
+
+**Problem.** Hitting Stop before the model emitted its first token made the
+client (`static/js/chat.js` → `_renderCancelledBubble`) persist a display-only
+placeholder — `role="assistant"`, `content=""`,
+`metadata={stopped: true, cancelled: true}` — via
+`POST /api/session/{id}/inject_messages`, so the "[Cancelled by user]"
+indicator survives a refresh. Those empty assistant rows then flowed verbatim
+into the outbound `messages` array of every later turn: nothing between
+persisted history and the HTTP payload filtered them. Lenient providers
+(OpenAI, DeepSeek, local backends) ignore `content: ""`, but Moonshot/Kimi
+reject the whole request with
+`HTTP 400: ... the message at position N with role 'assistant' must not be empty`.
+Any conversation containing one such placeholder was permanently un-sendable
+with a Kimi model — including placeholders Kimi itself had produced before
+being stopped — while brand-new sessions (no placeholders) worked fine. The
+live DB held 106 of these rows across ~40 sessions.
+
+**Fix** (`161ba0a4`). Filter empty assistant turns out of the outbound model
+context in two places:
+
+- **`core/models.py` → `Session.get_context_messages()`** (the canonical
+  boundary every chat/agent path funnels through, which already excluded
+  display-only `metadata.source == "slash"` messages): now also excludes
+  assistant messages whose content is empty/whitespace-only **and** that carry
+  no `tool_calls`. The filter keys off *content*, not the client-controllable
+  `cancelled` metadata flag, so forged `inject_messages` metadata cannot hide
+  real assistant turns from the model. Tool-calls-only turns (content `""`
+  with `tool_calls`) are kept, since dropping them would orphan their tool
+  result messages.
+- **`src/context_compactor.py` → `_sanitize_tool_messages()`**: the same
+  filter as "Pass 0", defense-in-depth for paths that bypass the boundary
+  (incognito, group chat).
+
+The transcript/display is untouched — the "[Cancelled by user]" bubbles still
+render, because UI/history paths read raw `history`, not the filtered outbound
+copy. The fix is retroactive: pre-existing poisoned conversations work again
+after a server restart, no DB cleanup needed.
+
+**Tests** (`tests/test_empty_assistant_context.py`): 8 regression tests —
+placeholder excluded, whitespace-only excluded, partial-stop content kept,
+tool-calls turns kept, transcript untouched, and tool-pairing intact after
+removal.
+
 ## 2026-09-01 — Ticked bash now also survives the explicit-web-intent strip
 
 **Problem.** The ticked bash toggle was *still* flaky, for a second reason.
