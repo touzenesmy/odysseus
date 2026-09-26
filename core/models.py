@@ -170,11 +170,25 @@ class Session:
         ``metadata.source == "slash"``; exclude them here so they never reach
         the model. Display/history-load paths use the raw ``history`` and are
         unaffected.
+
+        Empty assistant turns are likewise display-only: the client persists a
+        ``content == ""`` placeholder (``metadata.stopped`` + ``cancelled``)
+        when the user aborts a stream before the first token so the
+        "[Cancelled by user]" indicator survives a refresh. Some providers
+        (e.g. Moonshot/Kimi) reject an assistant message with empty content
+        with HTTP 400, which then poisons every subsequent turn of that
+        conversation — so they are excluded from the outbound context but
+        kept in the transcript.
         """
         messages = [
             msg.to_dict()
             for msg in self.history
             if (msg.metadata or {}).get("source") != "slash"
+            and not (
+                msg.role == "assistant"
+                and not (msg.content or "").strip()
+                and not (msg.metadata or {}).get("tool_calls")
+            )
         ]
         from src.background_tool_jobs import background_result_context
         messages = [part for message in messages for part in (

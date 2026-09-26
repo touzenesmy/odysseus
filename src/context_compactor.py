@@ -155,6 +155,20 @@ def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
       - drops assistant `tool_calls` messages whose tool responses were
         all trimmed away (some providers reject unanswered tool_calls)
     """
+    # Pass 0: drop empty assistant turns with no tool_calls. The client
+    # persists a content=="" placeholder (stopped+cancelled) when the user
+    # aborts a stream before the first token; strict providers (e.g.
+    # Moonshot/Kimi) reject empty assistant content with HTTP 400, which
+    # poisons every later turn of the conversation.
+    msgs = [
+        m for m in msgs
+        if not (
+            m.get("role") == "assistant"
+            and not m.get("tool_calls")
+            and not (m.get("content") or "").strip()
+        )
+    ]
+
     # Pass 1: drop orphan tool messages.
     cleaned: List[Dict] = []
     in_batch = False  # are we right after an assistant tool_calls (or mid-batch)?
