@@ -1,6 +1,6 @@
 # Chat
 
-Last updated: dev@3b6c1691 | 2026-09-16
+Last updated: dev@161ba0a4 | 2026-09-26
 
 ## Scope
 
@@ -51,7 +51,13 @@ Runtime behavior:
   attachment-reference lines;
 - agent streams forward explicit round-cap, tool-budget, repeated-tool-loop,
   and intent-without-action guard events so the frontend can distinguish a
-  controlled stop from a stalled response.
+  controlled stop from a stalled response;
+- aborting a stream before the first token persists a **display-only** empty
+  assistant placeholder so the "[Cancelled by user]" indicator survives a
+  refresh: `_renderCancelledBubble` in `static/js/chat.js` POSTs
+  `{"role": "assistant", "content": "", "metadata": {"stopped": true, "cancelled": true}}`
+  to `/api/session/{id}/inject_messages`. These rows must never reach the
+  model — see "Empty assistant turns" below.
 
 `src.agent_runs` owns detached in-memory stream runs, replay buffers, replacement cancellation, resume subscribers, explicit stop, and terminal-buffer eviction. Closing the SSE connection does not necessarily stop generation. `static/js/chat.js` can live-resume a still-running detached stream through `/api/chat/resume/{session_id}`; rich responses reload from DB for canonical rendering. Detached runs are process-local and do not survive server restart.
 
@@ -68,6 +74,17 @@ Fallback candidates receive route-neutral context shaping. Only compaction perfo
 Chat preface enhances the model's context. It must not rewrite the user message or force literal-vs-fetch interpretation before the model sees the request. See [context-building.md](context-building.md).
 
 Chat-owned external context must enter the model through `untrusted_context_message()` unless a different treatment is explicitly documented. This includes memory, RAG, web search, URL fetches, prefetched search context, YouTube transcripts, research injection, and manual context injection.
+
+## Empty Assistant Turns
+
+Assistant messages with empty/whitespace-only content and no `tool_calls` are excluded from the outbound model context, because strict providers reject them (Moonshot/Kimi returns `HTTP 400: ... role 'assistant' must not be empty`) and a single persisted placeholder would otherwise poison every subsequent turn of that conversation (2026-09-26, `161ba0a4`, `tests/test_empty_assistant_context.py`).
+
+The filter lives in two places:
+
+- `core/models.py` → `Session.get_context_messages()` — the canonical boundary all chat/agent paths funnel through (it already excluded display-only `metadata.source == "slash"` messages). The filter keys off **content**, not the client-controllable `cancelled` metadata flag, so forged `inject_messages` metadata cannot hide real assistant turns from the model.
+- `src/context_compactor.py` → `_sanitize_tool_messages()` ("Pass 0") — defense-in-depth for paths that bypass the boundary (incognito, group chat).
+
+Tool-calls-only turns (content `""` with `tool_calls`) are kept: dropping them would orphan their tool-result messages. The transcript/display is untouched — UI/history paths read raw `history`, not the filtered outbound copy — so "[Cancelled by user]" bubbles still render. See [model-quirks.md](model-quirks.md) for the provider-behavior observation.
 
 ## Modes And Handoffs
 
