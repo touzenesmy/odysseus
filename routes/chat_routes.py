@@ -214,6 +214,11 @@ async def _sse_keepalive(agen, interval: float = 30.0) -> AsyncGenerator[str, No
         except StopAsyncIteration:
             await q.put(_DONE)
         except BaseException as e:
+            # A CancelledError raised UPSTREAM (client disconnect -> upstream task
+            # cancelled; the route's finally persisted state) is DATA the consumer
+            # must re-raise — queue it, don't die. Our own pump.cancel() also
+            # arrives at this await point; queueing is harmless (unbounded queue,
+            # no reader left) and the pump then exits.
             await q.put(e)
 
     pump = asyncio.create_task(_pump())
@@ -230,8 +235,11 @@ async def _sse_keepalive(agen, interval: float = 30.0) -> AsyncGenerator[str, No
                 raise item
             yield item
     finally:
+        # Fire-and-forget: Task.cancel() returns a bool (NOT awaitable), and
+        # awaiting the pump's shutdown would stall the close path if the pump
+        # is blocked in a slow __anext__ (e.g. an HTTP read).
         if not pump.done():
-            await pump.cancel()
+            pump.cancel()
 def _chat_candidate_request_factory(
     messages,
     fallback_context_length: int = 0,
