@@ -94,6 +94,35 @@ async def test_short_source():
     assert out == ["only"]
 
 
+@pytest.mark.asyncio
+async def test_early_consumer_close_does_not_raise():
+    """Consumer breaks early (client disconnect) -> finally() runs.
+    Regression: the finally previously did `await pump.cancel()` — Task.cancel()
+    returns a bool, so awaiting it raised TypeError on EVERY early close."""
+    async def endless():
+        i = 0
+        while True:
+            yield f"c{i}"
+            i += 1
+            # Real streams always await (network I/O). A source with zero
+            # awaits starves the event loop in the pump task (tight
+            # __anext__/put loop never yields control) and hangs pytest —
+            # keep this source realistic.
+            await asyncio.sleep(0)
+
+    wrap = _sse_keepalive(endless(), interval=0.05)
+    got = await anext(wrap)  # one chunk, then abandon the stream
+    assert got == "c0"
+    # aclose() triggers GeneratorExit -> finally (pump cleanup).
+    # Must NOT raise TypeError('object bool can't be used in 'await' ...').
+    try:
+        await wrap.aclose()
+    except TypeError as e:
+        pytest.fail(f"early close raised TypeError: {e}")
+    # Let the fire-and-forget pump.cancel() actually land before the loop closes.
+    await asyncio.sleep(0.05)
+
+
 def test_wrapped_streams_are_async_generators():
     """Both hot loops wrap the real streams — assert the module wiring kept
     the call sites (source-guard: a refactor that unwraps them stays green
