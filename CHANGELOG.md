@@ -4,6 +4,37 @@ Human-readable summary of notable changes to this fork. The git commit history r
 the authoritative record; this file exists so "what changed and when" is readable
 without `git log`.
 
+## 2026-10-10 — Phone app: Agent mode turns were silently pinned to strict chat (no tools)
+
+**Problem.** In the APK, selecting **Agent** and sending a message produced a
+plain conversation reply — no tool calls, the turn just ended. The same message
+sent from the desktop browser worked (full agent turn).
+
+**Root cause.** The v2.7 phone "Chat mode only" deep link (`?strict_chat=1`) was
+re-read by the *send path* on every turn
+(`chat.js`: `isStrictMode = _strictUrl || ...`), so the phone sent
+`strict_chat=true` **even when the user had explicitly tapped Agent**. The
+server pin then ran every turn as no-tools strict chat. The browser never had
+the URL param, so it was unaffected — exactly the reported asymmetry.
+
+**Fix.**
+- Send path is now driven by the **mode toggle only**:
+  `isStrictMode = (toggleState.mode || 'chat') === 'strict'`.
+- The URL param stays a **per-launch UI default**: `initModeToggle` still
+  preselects the Strict pill on phone load, and now **persists it** like any
+  selection (the phone's WebView profile has its own localStorage, so the
+  desktop preference is untouched). This also closes the original 2026-09-23
+  hole (phone sending the shared desktop 'agent' mode for strict sessions).
+- Cache buster `20260925strictconst1` → `20261010strictagent2` (all four refs
+  moved together, per the 2026-09-25 lesson).
+- Tests: updated `test_ui_has_strict_button_and_toggle_state` + new
+  `test_strict_url_param_is_default_only_not_send_override`
+  (17 passed).
+
+Static JS only — **no service restart** (files served from disk per request;
+verified the live server serves the fixed lines). Browsers with the old module
+cached get the new one via the bumped buster on next load.
+
 ## 2026-09-26 — Empty "Cancelled" assistant turns no longer poison strict providers (Moonshot/Kimi)
 
 **Problem.** Hitting Stop before the model emitted its first token made the
