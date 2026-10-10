@@ -10,7 +10,7 @@ import modelsModule from './js/models.js';
 import ragModule from './js/rag.js';
 import presetsModule from './js/presets.js?v=20260908personaname1';
 import searchModule from './js/search.js';
-import chatModule from './js/chat.js?v=20260925strictconst1';
+import chatModule from './js/chat.js?v=20261010strictagent2';
 import compareModule from './js/compare/index.js?v=20260909mobilepaneaddscroll1';
 import documentModule from './js/document.js?v=20260916docctx2';
 import searchChatModule from './js/search-chat.js';
@@ -1869,10 +1869,15 @@ function initializeEventListeners() {
     let currentMode = state.mode || 'chat';
 
     // ?strict_chat=1 (deep-linked by the phone app's "Chat mode" switch)
-    // forces strict chat on load — unconditionally, so the phone always opens
-    // conversation-only regardless of the web UI's last-saved mode. It is an
-    // ephemeral per-launch override: don't persist it back into the shared
-    // toggle state (that would clobber the desktop preference).
+    // preselects strict chat on load — unconditionally, so the phone always
+    // OPENS conversation-only regardless of the last-saved mode. It persists
+    // like any selection: the send path is storage-driven, so the launch
+    // default must reach storage or it silently reverts (journal 2026-10-10:
+    // the send path read the URL param directly instead, which then pinned
+    // the user to strict even after an explicit Agent tap — agent turns
+    // died in the app while the same message worked in the browser).
+    // Persisting is safe per device: the phone's WebView profile keeps its
+    // own localStorage, separate from the desktop browser.
     const strictUrl = new URLSearchParams(location.search).get('strict_chat') === '1';
     if (strictUrl) currentMode = 'strict';
 
@@ -1920,7 +1925,7 @@ function initializeEventListeners() {
     });
     chatBtn.addEventListener('click', () => setMode('chat'));
     if (strictBtn) strictBtn.addEventListener('click', () => setMode('strict'));
-	    setMode(currentMode, { persist: !strictUrl });
+	    setMode(currentMode);
 	  })();
 
   (function initPlanToggle() {
