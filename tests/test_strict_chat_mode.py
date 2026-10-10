@@ -164,19 +164,35 @@ def test_ui_has_strict_button_and_toggle_state():
     assert "mode-strict-btn" in js
     assert "if (strictUrl) currentMode = 'strict';" in js  # phone override wins
     chat_js = _CHAT_JS.read_text(encoding="utf-8")
-    # The send path must honor the ?strict_chat=1 deep link the same way
-    # initModeToggle does — the phone's override is ephemeral (not persisted
-    # to toggle storage), so the URL param is the only signal at send time.
-    # Journal 2026-09-23: the phone sent its shared 'agent' mode for a
-    # strict session, so the server ran full agent turns with bash + browser.
-    assert "const _strictUrl = new URLSearchParams(location.search).get('strict_chat') === '1';" in chat_js
-    assert "const isStrictMode = _strictUrl || (toggleState.mode || 'chat') === 'strict';" in chat_js
+    # The send path is driven by the mode toggle ONLY. Journal 2026-10-10:
+    # re-reading the ?strict_chat=1 URL param here pinned the phone to
+    # strict chat even on explicit Agent selections (agent turns died in
+    # the app, worked in the browser). The param stays a per-launch UI
+    # default (initModeToggle preselects the Strict pill on load).
+    assert "const isStrictMode = (toggleState.mode || 'chat') === 'strict';" in chat_js
+    assert "_strictUrl ||" not in chat_js
     assert "fd.append('strict_chat', 'true');" in chat_js
     assert "isAgentMode ? 'agent' : (isStrictMode ? 'strict' : 'chat')" in chat_js
     # client-side escalations suppressed in strict mode
     assert "!isStrictMode && !isIncognito &&" in chat_js
     # web search stays available in strict mode
     assert "el('web-toggle').checked || isStrictMode" in chat_js
+
+
+def test_strict_url_param_is_default_only_not_send_override():
+    """Regression (2026-10-10): the ?strict_chat=1 deep link must preselect
+    the Strict pill on load (the phone's Chat-mode default) but must NOT
+    override an explicit Agent/Chat selection at send time."""
+    app_js = _APP_JS.read_text(encoding="utf-8")
+    assert "if (strictUrl) currentMode = 'strict';" in app_js  # load-time default
+    # The launch default must reach storage (the send path is storage-driven).
+    # persist:false would let the send path revert to the stale stored mode.
+    assert "setMode(currentMode, { persist: !strictUrl });" not in app_js
+    assert "setMode(currentMode);" in app_js
+    chat_js = _CHAT_JS.read_text(encoding="utf-8")
+    assert "const isStrictMode = (toggleState.mode || 'chat') === 'strict';" in chat_js
+    assert "isStrictMode = _strictUrl" not in chat_js
+    assert "_strictUrl ||" not in chat_js
 
 
 def test_strict_blocks_tool_intent_escalation():
