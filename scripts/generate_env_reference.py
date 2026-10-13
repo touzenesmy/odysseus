@@ -765,6 +765,22 @@ VARIABLE_NOTES: dict[str, tuple[str, str, str]] = {
         "Speech and vision models", USER,
         "Object-grounding model id the gallery loads for text-driven selection.",
     ),
+    "ODYSSEUS_PIPER_VOICE_DIR": (
+        "Speech and vision models", USER,
+        "Directory holding Piper voice files for the TTS voice picker; defaults to "
+        "~/.cache/piper-voices. Set it for installs that keep voices elsewhere.",
+    ),
+    "ODYSSEUS_SILERO_VAD_PATH": (
+        "Speech and vision models", USER,
+        "Override for the Silero VAD model file used by voice-activity detection. "
+        "Unset keeps the bundled default path.",
+    ),
+    "ODYSSEUS_LOCALMODEL_CONF": (
+        "Speech and vision models", USER,
+        "Path to the optional localmodel boot config (vision-language override "
+        "layer). Unset falls back to a localmodel/boot-model.conf beside the app "
+        "root.",
+    ),
 
     # -- Auth and internal API ----------------------------------------------
     "ODYSSEUS_INTERNAL_TOKEN": (
