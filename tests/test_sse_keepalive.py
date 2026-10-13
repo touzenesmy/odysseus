@@ -129,4 +129,7 @@ def test_wrapped_streams_are_async_generators():
     only if this guard is updated deliberately)."""
     src = inspect.getsource(inspect.getmodule(_sse_keepalive))
     assert "async for chunk in _sse_keepalive(stream_llm_with_fallback(" in src
-    assert "async for chunk in _sse_keepalive(stream_agent_loop(" in src
+    # Agent hot loop: 2026-10 upstream added the execution-bridge wrapper,
+    # so keepalive now wraps _stream_agent_with_execution_bridge (which
+    # itself iterates stream_agent_loop).
+    assert "async for chunk in _sse_keepalive(_stream_agent_with_execution_bridge(" in src

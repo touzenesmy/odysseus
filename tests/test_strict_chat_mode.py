@@ -129,8 +129,16 @@ def test_strict_blocks_all_escalation_sites():
     assert 'if strict_chat:\n            chat_mode = "chat"' in source
     # contextual web follow-up
     assert "not strict_chat\n                and chat_mode == \"chat\"" in source
-    # contextual browser follow-up
-    assert "if not strict_chat and isinstance(message, str) and _is_contextual_browser_followup" in source
+    # contextual browser follow-up (2026-10: restructured as a bool(...)
+    # block — the strict gate must still precede the followup check)
+    import re as _re
+    _m = _re.search(
+        r"_contextual_browser_turn_followup\s*=\s*bool\(\s*"
+        r"not\s+strict_chat\s+and\s+isinstance\(message, str\)\s+"
+        r"and\s+_is_contextual_browser_followup\(message, sess\)",
+        source,
+    )
+    assert _m, "browser follow-up escalation lost its strict_chat gate"
     # explicit-path workspace
     assert "if not strict_chat and not workspace and isinstance(message, str):" in source
 
