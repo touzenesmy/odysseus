@@ -71,8 +71,17 @@ def _build_context_harness(monkeypatch, chat_helpers, history, dynamic_preface_h
             character_name=None,
         )
 
-    def fake_add_user_message(sess, chat_handler, preprocessed, incognito=False):
-        sess.messages.append({"role": "user", "content": preprocessed.user_content})
+    def fake_add_user_message(sess, chat_handler, preprocessed, incognito=False,
+                              interaction_mode=None, auto_escalated=False):
+        meta = {}
+        if interaction_mode in {"chat", "agent", "research"}:
+            meta["interaction_mode"] = interaction_mode
+        if auto_escalated:
+            meta["auto_escalated"] = True
+        msg = {"role": "user", "content": preprocessed.user_content}
+        if meta:
+            msg["metadata"] = meta
+        sess.messages.append(msg)
 
     async def fake_maybe_compact(sess, endpoint_url, model, messages, headers, owner=None):
         return messages, 8192, False

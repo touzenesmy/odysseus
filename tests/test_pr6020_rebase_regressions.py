@@ -116,7 +116,11 @@ def test_odysseus_router_uses_compact_core(monkeypatch):
     )
 
     route = prompt_calls[0]
-    assert route["relevant_tools"] == GENERAL_COMPACT_TOOLS
+    # 5c74b7d2 (post-rebase): with the low-signal gate disabled the compact
+    # router core is unioned with the ALWAYS_AVAILABLE kit.
+    assert route["relevant_tools"] == GENERAL_COMPACT_TOOLS | {
+        "bash", "get_workspace", "python", "read_file",
+    }
 
 
 def test_odysseus_general_no_tool_mode_has_no_executable_surface(monkeypatch):

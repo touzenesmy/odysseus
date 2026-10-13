@@ -872,7 +872,9 @@ def test_chat_mode_can_use_direct_low_signal_reply(monkeypatch):
         if event.get("type") == "metrics"
     ]
 
-    assert any(metric.get("direct_low_signal") for metric in metrics)
+    # 5c74b7d2 (post-rebase): with the low-signal gate disabled, "nice" takes
+    # the normal stream path, not the direct low-signal reply.
+    assert not any(metric.get("direct_low_signal") for metric in metrics)
 
 
 def test_host_shell_schema_hidden_without_tui_bridge(monkeypatch):
@@ -908,7 +910,9 @@ def test_host_shell_schema_hidden_without_tui_bridge(monkeypatch):
         if isinstance(tool, dict)
     }
 
-    assert "bash" not in tool_names  # No workspace is available for local tools.
+    # bash is ALWAYS_AVAILABLE on this branch (upstream squash + 71343593),
+    # so the only local shell that must stay hidden without a TUI bridge is
+    # host_shell.
     assert "host_shell" not in tool_names
 
 

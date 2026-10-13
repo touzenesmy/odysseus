@@ -763,9 +763,10 @@ def test_web_intent_bash_guard_in_route_source():
     match (e.g. the word 'today' in a coding message)."""
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
     assert "_bash_explicitly_on = allow_bash is not None" in source
-    # The guard must appear BEFORE the web-intent block consumes it.
+    # The guard must appear BEFORE the web-intent block consumes it. (The
+    # block's condition is multi-line: "if (\n    _explicit_web_intent ...".)
     guard = source.index("_bash_explicitly_on = allow_bash is not None")
-    web_block = source.index("if _explicit_web_intent:")
+    web_block = source.index("_explicit_web_intent\n")
     assert guard < web_block, (
         "_bash_explicitly_on must be defined before the web-intent strip"
     )

@@ -24187,6 +24187,13 @@ async def stream_agent_loop(
         if turn_contract is not None and tool_surface != "full":
             route_tools = set(turn_contract.offered)
         if prompt_compact:
+            # The low-signal gate is disabled on this branch (see
+            # _classify_agent_request), so guide-only turns can reach the
+            # compact path with no retrieved tool set. A None set would 500
+            # the request (route_tools.update on NoneType); treat it as "no
+            # tools offered", which is the guide-only contract anyway.
+            if route_tools is None:
+                route_tools = set()
             route_tools.update(
                 _blocked_network_recovery_tools(tool_events)
                 - set(disabled_tools)

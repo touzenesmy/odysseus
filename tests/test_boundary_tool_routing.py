@@ -55,8 +55,11 @@ def test_source_filename_selects_the_workspace_domain():
 
 
 def test_short_casual_followup_stays_low_signal():
+    # 5c74b7d2 (post-rebase): the low-signal gate is disabled on this branch —
+    # vague follow-ups flow through RAG + keyword seeding, so the flag stays
+    # off and the direct-reply fast path never fires for them.
     result = _classify_agent_request([], "test now")
-    assert result["low_signal"] is True
+    assert result["low_signal"] is False
     assert result["domains"] == set()
 
 

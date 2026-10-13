@@ -188,6 +188,12 @@ class Session:
                 msg.role == "assistant"
                 and not (msg.content or "").strip()
                 and not (msg.metadata or {}).get("tool_calls")
+                # An empty turn that captured partial reasoning is semantic,
+                # not display-only: the resume path replays that thinking as
+                # ``reasoning_content`` (see below). Keep it so interrupted
+                # thinking survives; provider-empty (Moonshot 400) turns are
+                # exactly the ones without a thinking trace.
+                and not str(((msg.metadata or {}).get("thinking")) or "").strip()
             )
         ]
         from src.background_tool_jobs import background_result_context

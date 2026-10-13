@@ -47,6 +47,8 @@ def _load_db_history_entry():
     }
     exec(compile(ast.parse(display_src), str(HIST), "exec"), ns)
     ns["_history_display_content"] = ns["_history_display_content"]
+    from routes.chat_helpers import strip_tui_local_context
+    ns["strip_tui_local_context"] = strip_tui_local_context
     exec(compile(ast.parse(entry_src), str(HIST), "exec"), ns)
     return ns["_db_history_entry"]
 
