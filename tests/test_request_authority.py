@@ -89,6 +89,36 @@ def test_unknown_intent_has_no_generic_execution_floor():
     assert {g.tool for g in grant.grants} == {"ask_user", "update_plan"}
 
 
+def test_unknown_intent_keeps_ask_user_floor_with_fork_flag_off(monkeypatch):
+    """Default behavior is upstream's: no family -> ask_user/update_plan only."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    grant = create_request_authority("Testing, did it work?")
+    assert {g.tool for g in grant.grants} == {"ask_user", "update_plan"}
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes"])
+def test_unknown_intent_gets_contract_core_recovery_surface_with_fork_flag(monkeypatch, value):
+    """Fork opt-in: promote the turn contract's own CONTRACT_CORE_TOOLS
+    recovery surface (offered to the model but denied upstream) to grants,
+    so short/ambiguous follow-ups keep a usable core instead of a full lockout."""
+    monkeypatch.setenv("ODYSSEUS_CORE_TOOL_GRANTS", value)
+    grant = create_request_authority("Testing, did it work?")
+    tools = {g.tool for g in grant.grants}
+    assert {"bash", "python", "read_file", "web_search", "web_fetch", "ask_user"} <= tools
+    # The recovery surface is added, never widened: no browser, no writes.
+    assert "private_browser" not in tools
+
+
+def test_fork_flag_does_not_widen_recognized_families(monkeypatch):
+    """The opt-in only fills the unknown-intent floor; explicit intent is unchanged."""
+    monkeypatch.setenv("ODYSSEUS_CORE_TOOL_GRANTS", "1")
+    before = create_request_authority("Find my recent invoices in the workspace files")
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS")
+    reference = create_request_authority("Find my recent invoices in the workspace files")
+    assert {g.tool for g in before.grants} == {g.tool for g in reference.grants}
+
+
+
 @pytest.mark.parametrize("metadata", [
     {"tool_events": [{"tool": "bash", "output": "pwd", "exit_code": 0}]},
     {"tool_events": [{"tool": "python", "output": "ready", "exit_code": 0}]},
