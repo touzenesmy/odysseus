@@ -50,6 +50,11 @@ if [[ -n "$STATUS_LINES" ]]; then
             echo ">> Recover later with: git stash pop"
             ;;
         d|D)
+            echo ""
+            echo ">> WARNING: Discarding local changes. Untracked files that will be DELETED:"
+            git clean -nd || true
+            read -rp ">> Proceed? [y/N]: " CONFIRM
+            [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo ">> Aborted."; exit 1; }
             git reset --hard HEAD
             git clean -fd
             echo ">> Local changes discarded."
