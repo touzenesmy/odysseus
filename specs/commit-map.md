@@ -1,6 +1,6 @@
 # Commit map — `improvements-20261014`
 
-Feature → commit index for the Improvements branch: **103 commits ahead of `upstream/dev` (`a8c147b2`)**, cut 2026-10-14.
+Feature → commit index for the Improvements branch: **105 commits ahead of `upstream/dev` (`a8c147b2`)**, cut 2026-10-14.
 
 - SHAs are valid **until the next rebase** (a rebase rewrites all of them). Regenerated as part of the post-rebase procedure (user-odysseus-fork skill, step 4g).
 - One commit per line, oldest → newest within each group. Detail: `git show <sha>`.
@@ -155,3 +155,5 @@ Feature → commit index for the Improvements branch: **103 commits ahead of `up
 - `d332e859` test: re-aim source guards at the restructured stream paths (post-rebase)
 - `38c86045` fix(post-rebase): restore branch-specific behavior on the upstream rebuild
 - `9ac7ae2c` docs(env): document the three speech-model env knobs the reference was missing
+- `36359ef8` docs(specs): commit-map — feature-to-SHA index (self-referencing: documents all commits up to the one below it)
+- `dd900647` feat(authority): opt-in CONTRACT_CORE_TOOLS recovery grants for unknown intent (ODYSSEUS_CORE_TOOL_GRANTS)
