@@ -1,9 +1,11 @@
 # Commit map — `improvements-20261014`
 
-Feature → commit index for the Improvements branch: **105 commits ahead of `upstream/dev` (`a8c147b2`)**, cut 2026-10-14.
+Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14, relative to `upstream/dev` (`a8c147b2`).
 
-- SHAs are valid **until the next rebase** (a rebase rewrites all of them). Regenerated as part of the post-rebase procedure (user-odysseus-fork skill, step 4g).
-- One commit per line, oldest → newest within each group. Detail: `git show <sha>`.
+- **Keep-current rule:** whenever work is finished and committed to this branch, append the new commit(s) here (new feature group if needed) **and commit the map**. The map can never list the commit that updates it, so `ahead count = entries + 1` is always true — that is normal, not drift.
+- Live ahead count (trust this over any number written here): `git rev-list --count upstream/dev..improvements-20261014`
+- Regenerate/append after **every work-batch commit** and always regenerate after a rebase (user-odysseus-fork skill, step 4g).
+- SHAs are valid **until the next rebase** (a rebase rewrites all of them). One commit per line, oldest → newest within each group. Detail: `git show <sha>`.
 
 ## A. Deployment scripts & fork tooling (update.sh / boot.sh / setup.sh)
 
@@ -157,3 +159,4 @@ Feature → commit index for the Improvements branch: **105 commits ahead of `up
 - `9ac7ae2c` docs(env): document the three speech-model env knobs the reference was missing
 - `36359ef8` docs(specs): commit-map — feature-to-SHA index (self-referencing: documents all commits up to the one below it)
 - `dd900647` feat(authority): opt-in CONTRACT_CORE_TOOLS recovery grants for unknown intent (ODYSSEUS_CORE_TOOL_GRANTS)
+- `605db810` docs(specs): commit-map — add authority opt-in + map-commit entries (105 documented)
