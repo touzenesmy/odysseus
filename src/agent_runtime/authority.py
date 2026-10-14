@@ -8,6 +8,7 @@ from functools import wraps
 from inspect import signature
 import json
 from pathlib import Path
+import os
 import re
 from uuid import uuid4
 
@@ -21,6 +22,7 @@ from src.tool_policy import ToolPolicy, build_effective_tool_policy
 from src.turn_contract import (
     FAMILY_TOOLS, canonical_tool, requested_capabilities,
     RequiredReadOperation, required_read_operation_for_request, selected_tools_for_request,
+    CONTRACT_CORE_TOOLS,
 )
 
 
@@ -383,6 +385,15 @@ def create_request_authority(request_text, *, owner=None, session_id=None, works
         tools = {canonical_tool(operation.tool)}
     else:
         operation = None
+    # Fork opt-in (ODYSSEUS_CORE_TOOL_GRANTS=1): the turn contract offers the
+    # model the CONTRACT_CORE_TOOLS recovery surface when no family was
+    # recognized, but upstream grants execution of none of it — the model can
+    # see tools it can never call. With the flag set, grant execution of that
+    # same recovery surface. Default off: unrecognized intent keeps the
+    # upstream ask_user/update_plan-only behavior.
+    if (families <= {"unknown"} and selected is None and operation is None
+            and os.environ.get("ODYSSEUS_CORE_TOOL_GRANTS", "").strip().lower() in {"1", "true", "yes"}):
+        tools |= set(CONTRACT_CORE_TOOLS)
     grants = []
     for name in sorted(tools | {"ask_user", "update_plan"}):
         name = canonical_tool(name)
