@@ -33,6 +33,8 @@
   bwrap, mode enforcing. `/workspace` (= user home) rw; repo `.venv` and
   `/usr`/`/etc` read-only; network inherited; no sudo/systemctl from inside.
   Use `cd /workspace/odysseus` inside (not `~` — host home is not mounted as `~`).
+  `git push` inside needs `GIT_SSH_COMMAND="ssh -F /dev/null -o IdentitiesOnly=yes
+  -o IdentityFile=~/.ssh/id_ed25519"` — plain ssh trips over host `/etc/ssh` perms.
 
 ## RESOLVED 2026-10-15 ~19:10 EDT — bash containment blocked the 2014 branch
 - **Resolution:** `bwrap` installed (0.12.0), probe passed, `./update.sh` switch
