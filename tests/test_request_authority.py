@@ -616,3 +616,48 @@ async def test_authority_denial_cannot_create_completion_receipt(monkeypatch):
     assert journal.actions[0].execution_id is None
     assert journal.actions[0].outcome["authoritative"] is False
     assert journal.actions[0].outcome["blocked"] is True
+
+
+# ── Fork rule: the UI bash toggle is the ONLY request-authority gate for bash ──
+# The route stamps web_ui_state from the server-side effective policy (never
+# the client's raw value), so the flag below is exactly "the user's bash
+# button for this request". ON grants bash for any request text; OFF denies
+# bash via the policy's disabled set; absent (non-WebUI callers) leaves the
+# upstream floor untouched.
+
+
+def test_bash_toggle_on_grants_bash_for_unknown_intent(monkeypatch):
+    """Button ON -> bash granted for a bare/ambiguous request, with the
+    ODYSSEUS_CORE_TOOL_GRANTS recovery flag OFF (the button is enough)."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    grant = create_request_authority("Testing",
+        client_runtime_context={"web_ui_state": {"bash": True}})
+    assert grant.permits(ExactOperation.normalize("bash", "pwd"))
+    # python is not a button tool: it stays intent-gated.
+    assert not grant.permits(ExactOperation.normalize("python", "print(1)"))
+
+
+def test_bash_toggle_on_grants_bash_for_explicit_requests(monkeypatch):
+    """Button ON also grants bash for an explicit shell request — parity
+    with the pre-authority behavior where the toggle meant the shell."""
+    grant = create_request_authority("Run pwd in the workspace",
+        client_runtime_context={"web_ui_state": {"bash": True}})
+    assert grant.permits(ExactOperation.normalize("bash", "pwd"))
+
+
+def test_bash_toggle_off_denies_bash_even_when_requested(monkeypatch):
+    """Button OFF -> restrict() denies bash no matter what the request says;
+    the OFF toggle and the policy's disabled set agree."""
+    grant = create_request_authority("Run bash pwd",
+        client_runtime_context={"web_ui_state": {"bash": False}},
+        policy=ToolPolicy(disabled_tools=frozenset({"bash"})))
+    assert not grant.permits(ExactOperation.normalize("bash", "pwd"))
+
+
+def test_bash_toggle_absent_keeps_upstream_floor(monkeypatch):
+    """No stamped web_ui_state (internal callers, tests) -> the button
+    neither grants nor revokes: upstream's floor is unchanged."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    grant = create_request_authority("Testing")
+    assert not grant.permits(ExactOperation.normalize("bash", "pwd"))
+    assert {g.tool for g in grant.grants} == {"ask_user", "update_plan"}
