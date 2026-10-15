@@ -394,6 +394,19 @@ def create_request_authority(request_text, *, owner=None, session_id=None, works
     if (families <= {"unknown"} and selected is None and operation is None
             and os.environ.get("ODYSSEUS_CORE_TOOL_GRANTS", "").strip().lower() in {"1", "true", "yes"}):
         tools |= set(CONTRACT_CORE_TOOLS)
+    # Fork rule: the UI bash toggle is the ONLY request-authority gate for
+    # bash. The route stamps client_runtime_context["web_ui_state"] from the
+    # server-side effective policy (the client's raw value never reaches
+    # this point), so "bash: true" here means the user's bash button is ON
+    # for this request:
+    #   ON  -> grant bash here, whatever the request text is (intent
+    #         classification can never revoke a ticked toggle);
+    #   OFF -> bash is in the policy's disabled set, so the restrict()
+    #         below denies it even if it also landed in `tools`.
+    # The grant and the denial both reduce to one value: the button.
+    _web_ui_state = (client_runtime_context or {}).get("web_ui_state") or {}
+    if _web_ui_state.get("bash"):
+        tools.add(canonical_tool("bash"))
     grants = []
     for name in sorted(tools | {"ask_user", "update_plan"}):
         name = canonical_tool(name)

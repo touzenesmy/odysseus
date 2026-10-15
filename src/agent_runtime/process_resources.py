@@ -382,6 +382,15 @@ def guard_launch_workspace(root):
     These are pathname/inode observations, not an atomic kernel access policy.
     They do not claim freedom from concurrent link replacement after checking.
     """
+    # Fork opt-out (ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH=1): this install runs
+    # the server from inside the workspace — the repo holds data/, .env and
+    # the job/containment stores — so the boundary can never seal here. With
+    # the flag set the guard is a no-op and the UI bash button (grant when
+    # ON, policy denial when OFF) is the only bash gate. Default off:
+    # upstream behavior. Drop on the next rebase if upstream ships a
+    # per-operator opt-out.
+    if os.environ.get("ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH", "").strip().lower() in {"1", "true", "yes"}:
+        return
     from src import bg_jobs, containment, constants
     from src import browser_identity
     from src.agent_runtime.resources import _control_plane_path, _control_plane_snapshot
