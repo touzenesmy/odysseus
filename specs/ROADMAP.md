@@ -15,19 +15,30 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-15, 04:40 EDT)
-- **Running:** `improvements-20261012` @ `207df1c0` (pre-rebase baseline) —
-  rolled back 2026-10-15 ~04:26 EDT because bash containment is unavailable on
-  the 2014 branch (see Active issue). Full assistant tool access on this code.
-- **`improvements-20261014`** @ `142cef50` (rebased + all fork fixes; == `Improvements`
-  alias == `touzenesmy/Improvements`) — ready, waiting on the bwrap install.
-- Service `odysseus` (systemd, uvicorn :7000), PID 979798 since the rollback.
-  Model is the separate `boot-model` unit (llama-server :8050).
+## Status (2026-10-15, ~19:30 EDT)
+- **Running:** `improvements-20261014` @ `f77a0359` (rebased + all fork fixes;
+  == `Improvements` alias == `touzenesmy/Improvements`) — switched 2026-10-15
+  ~19:05 EDT via `./update.sh` after bwrap install; bash containment verified
+  ENFORCING (see Active issue, now RESOLVED).
+- **`improvements-20261012`** @ `207df1c0` (pre-rebase baseline) — rollback
+  target, untouched.
+- Service `odysseus` (systemd, uvicorn :7000); host PID not visible from the
+  assistant's sandbox (PID namespace) — query it with
+  `systemctl show odysseus -p MainPID`. Model is the separate `boot-model` unit
+  (llama-server :8050).
 - `.env` flags in place (both needed on the 2014 branch):
   `ODYSSEUS_CORE_TOOL_GRANTS=1` (authority recovery grants) and
   `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH=1` (control-state guard opt-out).
+- **Sandbox contract (verified live 2026-10-15):** assistant commands run under
+  bwrap, mode enforcing. `/workspace` (= user home) rw; repo `.venv` and
+  `/usr`/`/etc` read-only; network inherited; no sudo/systemctl from inside.
+  Use `cd /workspace/odysseus` inside (not `~` — host home is not mounted as `~`).
 
-## ACTIVE ISSUE — bash containment blocks the 2014 branch
+## RESOLVED 2026-10-15 ~19:10 EDT — bash containment blocked the 2014 branch
+- **Resolution:** `bwrap` installed (0.12.0), probe passed, `./update.sh` switch
+  run, bash verified running with `mechanism: bubblewrap, mode: enforcing,
+  enforced: [filesystem, process_tree, wall_clock], executed: true` receipts.
+  History of the issue below.
 - **Symptom:** `bash: containment unavailable (filesystem, process_tree); command not executed`
 - **Root cause (verified 2026-10-15):** `src/containment.py` runs in
   `MODE_ENFORCING` by default (`CONTAINMENT_MODE = MODE_ENFORCING`, line 84);
@@ -61,8 +72,8 @@ must print a real path. Then check voice + strict mode once each.
 `git checkout --detach improvements-20261012 && sudo systemctl restart odysseus`
 
 ## Backlog
-- [ ] **1. Install bwrap + switch to `improvements-20261014` + verify** (bash, voice, strict). Owner: us, next session.
-- [ ] **2. Full test suite on the 2014 branch** after switching (fresh run; the pre-rebase baseline suite was 13,868 passed / 60 failed, 59 upstream pre-existing).
+- [x] **1. Install bwrap + switch to `improvements-20261014` + verify** — DONE 2026-10-15 (bwrap 0.12.0; enforcing receipts verified). Voice/strict smoke checks: [x] bash / [ ] voice / [ ] strict.
+- [ ] **2. Full test suite on the 2014 branch** (fresh run; the pre-rebase baseline suite was 13,868 passed / 60 failed, 59 upstream pre-existing).
 - [ ] **3. Five open upstream PRs** — #6226 #6230 #6232 #6234 #6236. Watch reviews; fold into the next rebase.
 - [ ] **4. Known upstream flake** — kimi full-suite failure (parked since before the rebase; not ours).
 - [ ] **5. Drop-check on next rebase:** `dd900647` (core-tool grants) and the two 2026-10-14/15 patches — drop any fork patch upstream has since fixed properly.
@@ -78,10 +89,15 @@ must print a real path. Then check voice + strict mode once each.
 - **Skills/memory:** point here; volatile values stay in this file.
 
 ## Session log
-- **2026-10-15:** Rolled back to `improvements-20261012` (bash containment
-  unavailable). Root cause: `bwrap` missing (containment.py enforcing mode,
-  bubblewrap is the only filesystem+process_tree mechanism). This document
-  created as the standing work tracker. Next: install bwrap, switch, verify.
+- **2026-10-15 (19:0x):** bwrap 0.12.0 installed; probe passed; switched to
+  `improvements-20261014` @ `f77a0359` via `./update.sh`; bash containment
+  verified enforcing (bubblewrap receipts). Sandbox boundaries probed and
+  documented (see Status). Roadmap itself updated to RESOLVED. Next: full test
+  suite (backlog 2), then PRs (3).
+- **2026-10-15 (04:26):** Rolled back to `improvements-20261012` (bash
+  containment unavailable). Root cause: `bwrap` missing (containment.py
+  enforcing mode, bubblewrap is the only filesystem+process_tree mechanism).
+  This document created as the standing work tracker.
 - **2026-10-14:** Rebase of the improvement branch onto upstream (540 commits),
   post-rebase integration fixes, authority work: `dd900647` core-tool opt-in
   grants, `01cece53` bash-button-as-only-gate + `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH`
