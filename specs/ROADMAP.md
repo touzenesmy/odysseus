@@ -15,13 +15,31 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-16, ~06:30 EDT)
-- **Running (pending restart):** `improvements-20261014` @ `1879e7de`
-  (rebased + all fork fixes + full-suite test-hermeticity fix + live answer
-  streaming opt-out `ODYSSEUS_LIVE_ANSWER_STREAM`, commit `f738b263`;
-  == `Improvements` alias == `touzenesmy/Improvements`) — switched 2026-10-15
-  ~19:05 EDT via `./update.sh` after bwrap install; bash containment verified
-  ENFORCING (see Active issue, now RESOLVED).
+## Status (2026-10-16, ~19:40 EDT)
+- **Local branch `Improvements` (working tree) @ `52cf20cd`** — rebased + all
+  fork fixes. Since the last push (`9164b030`): `821c55fd` (stall diagnosis),
+  `383c6ca7` (bash button now ALSO gates workspace file tools read/write/
+  edit/patch/glob/grep — file tools no longer denied by text-guessing while
+  bash is ON; + `ODYSSEUS_SHOW_THINKING=1` restores the Qwen 3.8 thinking
+  stream upstream hides — both fork opt-outs, default upstream), `52cf20cd`
+  (map). **NOT YET PUSHED — sandbox ssh cannot; user runs the push.**
+  NOTE: dated branch `improvements-20261014` + remote still at `9164b030`;
+  re-point `git branch -f improvements-20261014 Improvements` after push.
+  `.env` flags: CORE_TOOL_GRANTS=1, SERVER_HOME_LAUNCH=1,
+  COMPLETION_GATE=0, SHOW_THINKING=1 (line 29).
+- **Running service:** restarted 2026-10-16 15:29 EDT with the transcript-
+  wall fix; verify what code the running PID loaded before assuming the
+  unpushed commits are live.
+- **Known behaviors (diagnosed, verified in app.log + chat_messages):**
+  1. "Stalls" are mostly SLOW turns (200–285s/round, 27B q3 on 16GB VRAM)
+     with thinking hidden → invisible work. FIXED in code by SHOW_THINKING
+     (pending push+restart).
+  2. `[Cancelled]` errors = rebase-born close-path cancel semantics
+     (`11ed6f13`+`1928f283`): client disconnect (tab switch, phone lock,
+     refresh, stop) cancels the running turn. RULE: no refresh/lock/tab-
+     switch mid-turn; if cancelled, just resend.
+  3. Wall-of-text = context overload (>70% start). RULE: fresh session per
+     work block, ≤10 tool calls per turn, hand off here at ~70%.
 - **`improvements-20261012`** @ `207df1c0` (pre-rebase baseline) — rollback
   target, untouched.
 - Service `odysseus` (systemd, uvicorn :7000); host PID not visible from the
