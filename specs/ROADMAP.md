@@ -161,3 +161,10 @@ must print a real path. Then check voice + strict mode once each.
   Default OFF = upstream unchanged (18 upstream buffering tests pass with the
   flag set via hermetic scrub). Verify after restart: prose should stream
   token-by-token again instead of arriving in one burst.
+
+### Stall/Cancelled-turn diagnosis (2026-10-16, verified in app.log + chat_messages)
+Three distinct causes, all confirmed in data — "stall" is NOT one bug:
+1. **Slow turns + hidden thinking (main "stall" feel):** qwen3.8-27b-q3 on 16GB VRAM takes 200-285s per model round at 65-73K prompt tokens; upstream deliberately hides Qwen 3.8 private reasoning from the client (agent_loop ~line 27486). So 2-5 min stretches render NOTHING in the UI. Not a crash — just invisible work.
+2. **Cancel semantics (rebase-born, 11ed6f13 + 1928f283 close-path):** any client disconnect (phone lock, tab switch, stop button, hard refresh) cancels the running turn -> UI error + `cancelled: true` row in DB (e.g. 19:23:18Z, dead in 6s). Clean; nothing lost; just resend.
+3. **Context-overload degeneration (the wall-of-text):** long turns starting >70% ctx make the final answer collapse into raw log dumps. Rules: fresh session per work block; keep turns <= ~10 tool calls; hand off via ROADMAP at ~70% ctx.
+Rules: no refresh/lock/tab-switch mid-turn; fresh session per work block; if a turn dies -> just resend.
