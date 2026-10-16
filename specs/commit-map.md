@@ -167,3 +167,4 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `f77a0359` docs(specs): commit-map — ROADMAP entry
 - `51a5ab5d` test(authority): keep fork env vars hermetic in structural tests; document fork env vars in env reference
 - `3ed86515` docs(specs): commit-map + roadmap — full-suite results, 12 fork-caused failures fixed (51a5ab5d)
+- `383c6ca7` feat(authority): bash button also gates workspace file tools (read/write/edit/patch/glob/grep); ODYSSEUS_SHOW_THINKING=1 restores Qwen thinking stream (fork opt-outs, default upstream)
