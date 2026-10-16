@@ -215,7 +215,28 @@ def with_completion_gate(func):
         # Read per request so .env can toggle it without redecorating;
         # upstream default (flag unset/1): hold + verify + replace.
         if os.getenv('ODYSSEUS_COMPLETION_GATE', '1') == '0':
+            # Pre-wave-3 passthrough: every event streams untouched as it
+            # arrives. One rewrite: the loop's terminal final_response carries
+            # the full assembled round transcript (prose + fenced tool
+            # outputs), which clients treat as a whole-bubble replacement -
+            # that is what renders the turn as one wall of text. Rewrite its
+            # content to the prose that actually streamed (the tool output
+            # already lives in its tool cards), keeping the terminal bubble
+            # = the model's own answer.
+            prose_parts: list[str] = []
             async for chunk in func(*args, **kwargs):
+                data = None
+                if chunk.startswith('data: '):
+                    try:
+                        data = json.loads(chunk[6:])
+                    except (ValueError, TypeError):
+                        data = None
+                if isinstance(data, dict):
+                    if isinstance(data.get('delta'), str) and not data.get('thinking'):
+                        prose_parts.append(data['delta'])
+                    elif data.get('type') == 'final_response':
+                        data['content'] = ''.join(prose_parts).strip() or str(data.get('content') or '')
+                        chunk = 'data: ' + json.dumps(data) + '\n\n'
                 yield chunk
             return
         started = perf_counter()
