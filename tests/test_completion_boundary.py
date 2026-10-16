@@ -483,3 +483,52 @@ async def test_completion_gate_bypass_streams_untouched(monkeypatch):
     assert any('final_response' in c and 'hello world' in c for c in chunks)
     assert chunks.count(DONE) == 1
     assert not any('completion_decision' in c for c in chunks), 'bypass must not add gate events'
+
+
+@pytest.mark.asyncio
+async def test_completion_gate_bypass_terminal_final_is_prose_only(monkeypatch):
+    """Fork opt-out regression: the loop's terminal final_response carries the
+    full assembled round transcript (prose + fenced tool outputs); clients
+    treat final_response as a whole-bubble replacement, so that renders the
+    turn as one wall of text. The bypass must keep every event streaming
+    live but rewrite the terminal content to the prose that actually
+    streamed (tool output stays in its tool cards)."""
+    monkeypatch.setenv('ODYSSEUS_COMPLETION_GATE', '0')
+    transcript = ('Trying it now.\n\n```text\n/workspace\nappdata\nbackups\n```\n\n'
+                  'ls works. Checking deeper.\n\n```text\n/workspace/odysseus/specs\nROADMAP.md\n```\n\n'
+                  'Both worked cleanly.')
+
+    @with_completion_gate
+    async def stream(messages):
+        yield _event({'delta': 'Trying it now.\n\n'})
+        yield _event({'type': 'tool_start', 'data': {'tool': 'bash'}})
+        yield _event({'type': 'tool_output', 'data': {'tool': 'bash', 'output': '/workspace\nappdata\n'}})
+        yield _event({'delta': 'ls works. Checking deeper.\n\n'})
+        yield _event({'type': 'tool_start', 'data': {'tool': 'bash'}})
+        yield _event({'type': 'tool_output', 'data': {'tool': 'bash', 'output': '/workspace/odysseus/specs\n'}})
+        yield _event({'delta': 'Both worked cleanly.'})
+        yield _event({'type': 'final_response', 'content': transcript})
+        yield DONE
+
+    chunks = [chunk async for chunk in stream([])]
+    # Live streaming preserved: deltas and tool events pass through in order.
+    assert chunks[0].startswith('data: ') and 'Trying it now' in chunks[0]
+    tool_starts = [i for i, c in enumerate(chunks) if 'tool_start' in c]
+    assert len(tool_starts) == 2 and tool_starts[0] < tool_starts[1]
+    # The terminal final_response is rewritten to prose only.
+    finals = [json.loads(c[6:]) for c in chunks if 'final_response' in c]
+    assert len(finals) == 1
+    content = finals[0]['content']
+    assert 'Trying it now.' in content
+    assert 'Both worked cleanly.' in content
+    assert 'appdata' not in content and 'ROADMAP.md' not in content
+    assert '```' not in content
+    # Fallback: a turn with no prose deltas keeps the loop's original content.
+    @with_completion_gate
+    async def stream_no_prose(messages):
+        yield _event({'type': 'final_response', 'content': transcript})
+        yield DONE
+
+    chunks2 = [chunk async for chunk in stream_no_prose([])]
+    finals2 = [json.loads(c[6:]) for c in chunks2 if 'final_response' in c]
+    assert finals2[0]['content'] == transcript
