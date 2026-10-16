@@ -16,8 +16,9 @@
 >   here; link.
 
 ## Status (2026-10-16, ~06:30 EDT)
-- **Running:** `improvements-20261014` @ `3ed86515` (rebased + all fork fixes +
-  full-suite test-hermeticity fix;
+- **Running (pending restart):** `improvements-20261014` @ `1879e7de`
+  (rebased + all fork fixes + full-suite test-hermeticity fix + live answer
+  streaming opt-out `ODYSSEUS_LIVE_ANSWER_STREAM`, commit `f738b263`;
   == `Improvements` alias == `touzenesmy/Improvements`) — switched 2026-10-15
   ~19:05 EDT via `./update.sh` after bwrap install; bash containment verified
   ENFORCING (see Active issue, now RESOLVED).
@@ -30,6 +31,8 @@
 - `.env` flags in place (both needed on the 2014 branch):
   `ODYSSEUS_CORE_TOOL_GRANTS=1` (authority recovery grants) and
   `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH=1` (control-state guard opt-out).
+  `ODYSSEUS_LIVE_ANSWER_STREAM=1` (stream answer prose live instead of the
+  completion gate holding it until the turn ends — restores pre-wave-3 UX).
 - **Sandbox contract (verified live 2026-10-15):** assistant commands run under
   bwrap, mode enforcing. `/workspace` (= user home) rw; repo `venv` (named
   `venv`, not `.venv`) and `/usr`/`/etc` read-only; network inherited; no
@@ -95,9 +98,9 @@ must print a real path. Then check voice + strict mode once each.
   run from the user's terminal).
 - [ ] **3. Five open upstream PRs** — #6226 #6230 #6232 #6234 #6236. Watch reviews; fold into the next rebase.
 - [ ] **4. Known upstream flake** — kimi full-suite failure (parked since before the rebase; not ours).
-- [ ] **5. Drop-check on next rebase:** `dd900647` (core-tool grants),
-  `01cece53` (bash-button gate + launch opt-out), and `51a5ab5d` (test
-  hermeticity + env-reference entries for the two fork vars) — drop any fork
+- [ ] **5. Drop-check on next rebase:** `f738b263` (live answer streaming opt-out),
+  `dd900647` (core-tool grants), `01cece53` (bash-button gate + launch opt-out),
+  and `51a5ab5d` (test hermeticity + env-reference entries) — drop any fork
   patch upstream has since fixed properly. Upstream +18 commits since 2026-10-16
   check touched none of `authority.py`/`process_resources.py`/`containment.py`/
   `update.sh`; `afecd44d` (approve-once runs ungranted bash/python) is upstream
@@ -146,3 +149,13 @@ must print a real path. Then check voice + strict mode once each.
   grants, `01cece53` bash-button-as-only-gate + `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH`
   opt-out, `update.sh` discard guard, dated-branch convention, commit map.
   Details: `specs/instance-map.md` + fork skill session ledger.
+
+- 2026-10-16 ~07:30 EDT: live answer streaming opt-out landed (`f738b263`).
+  User opted B: restore pre-wave-3 streaming (the completion gate held ALL
+  answer prose until the generator unwinds → one big end-of-turn bubble;
+  same root as the wall-of-text incident). `ODYSSEUS_LIVE_ANSWER_STREAM=1`
+  streams deltas + final_response as they arrive; the gate still runs and
+  shapes the terminal event, it just can't retract already-released prose.
+  Default OFF = upstream unchanged (18 upstream buffering tests pass with the
+  flag set via hermetic scrub). Verify after restart: prose should stream
+  token-by-token again instead of arriving in one burst.
