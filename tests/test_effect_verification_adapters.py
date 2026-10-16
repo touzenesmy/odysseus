@@ -29,6 +29,13 @@ from src.agent_runtime.resources import (
 )
 from src.process_lifecycle import ProcessIdentity
 from src.tool_types import ToolBlock
+@pytest.fixture(autouse=True)
+def _scrub_fork_env_vars(monkeypatch):
+    """Upstream's pinned assertions here encode fork-flag-OFF behavior, so the
+    fork opt-outs are scrubbed: these tests always verify upstream defaults."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    monkeypatch.delenv("ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH", raising=False)
+    monkeypatch.delenv("ODYSSEUS_LIVE_ANSWER_STREAM", raising=False)
 
 
 GENERATION = "c" * 32

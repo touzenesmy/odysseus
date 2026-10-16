@@ -11,6 +11,13 @@ from src.agent_evidence import CompletionRequirements, EvidenceLedger, infer_com
 from src.agent_runtime.journal import current_journal
 from src.tool_types import ToolBlock
 from tests.runtime_evidence_helpers import authoritative_executor
+@pytest.fixture(autouse=True)
+def _scrub_fork_env_vars(monkeypatch):
+    """Upstream's pinned assertions here encode fork-flag-OFF behavior, so the
+    fork opt-outs are scrubbed: these tests always verify upstream defaults."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    monkeypatch.delenv("ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH", raising=False)
+    monkeypatch.delenv("ODYSSEUS_LIVE_ANSWER_STREAM", raising=False)
 
 
 ERROR = 'event: error\ndata: {"status": 504, "error": {"message": "stream timeout"}, "fallback_eligible": false}\n\n'
@@ -455,3 +462,25 @@ async def test_slice2_quoted_example_does_not_hide_an_unsupported_report():
     assert 'The docs say "5 passed".' in final
     assert 'I ran pytest' not in final
     assert 'The task is incomplete' not in final
+
+
+@pytest.mark.asyncio
+async def test_live_answer_stream_flag_releases_deltas_before_gate(monkeypatch):
+    """Fork opt-out: with ODYSSEUS_LIVE_ANSWER_STREAM=1, answer deltas and the
+    final response stream as they arrive (pre-wave-3 UX) instead of being held
+    until the generator unwinds. The terminal event still carries the gate."""
+    monkeypatch.setenv('ODYSSEUS_LIVE_ANSWER_STREAM', '1')
+
+    @with_completion_gate
+    async def stream(messages):
+        yield _event({'delta': 'Thinking out loud before the answer.'})
+        yield _event({'type': 'final_response', 'content': 'The live final answer.'})
+        yield DONE
+
+    chunks = [chunk async for chunk in stream([])]
+    order = [i for i, c in enumerate(chunks)
+             if 'Thinking out loud before the answer.' in c
+             or 'The live final answer.' in c]
+    assert order == sorted(order) and len(order) == 2, 'deltas must stream in order'
+    assert any('completion_decision' in c for c in chunks), 'terminal gate stays'
+    assert chunks.count(DONE) == 1
