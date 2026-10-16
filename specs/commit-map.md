@@ -163,3 +163,4 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `01cece53` feat(authority): bash button is the only bash gate; opt-out server-home launch guard (ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH)
 - `59015d37` docs(specs): ROADMAP.md — standing work tracker (state, backlog, active issue; update on state change)
 - `f77a0359` docs(specs): commit-map — ROADMAP entry
+- `51a5ab5d` test(authority): keep fork env vars hermetic in structural tests; document fork env vars in env reference

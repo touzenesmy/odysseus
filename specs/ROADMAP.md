@@ -15,8 +15,9 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-15, ~19:30 EDT)
-- **Running:** `improvements-20261014` @ `f77a0359` (rebased + all fork fixes;
+## Status (2026-10-16, ~01:20 EDT)
+- **Running:** `improvements-20261014` @ `51a5ab5d` (rebased + all fork fixes +
+  full-suite test-hermeticity fix;
   == `Improvements` alias == `touzenesmy/Improvements`) — switched 2026-10-15
   ~19:05 EDT via `./update.sh` after bwrap install; bash containment verified
   ENFORCING (see Active issue, now RESOLVED).
@@ -30,8 +31,9 @@
   `ODYSSEUS_CORE_TOOL_GRANTS=1` (authority recovery grants) and
   `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH=1` (control-state guard opt-out).
 - **Sandbox contract (verified live 2026-10-15):** assistant commands run under
-  bwrap, mode enforcing. `/workspace` (= user home) rw; repo `.venv` and
-  `/usr`/`/etc` read-only; network inherited; no sudo/systemctl from inside.
+  bwrap, mode enforcing. `/workspace` (= user home) rw; repo `venv` (named
+  `venv`, not `.venv`) and `/usr`/`/etc` read-only; network inherited; no
+  sudo/systemctl from inside.
   Use `cd /workspace/odysseus` inside (not `~` — host home is not mounted as `~`).
   `git push` inside needs `GIT_SSH_COMMAND="ssh -F /dev/null -o IdentitiesOnly=yes
   -o IdentityFile=~/.ssh/id_ed25519"` — plain ssh trips over host `/etc/ssh` perms.
@@ -75,10 +77,31 @@ must print a real path. Then check voice + strict mode once each.
 
 ## Backlog
 - [x] **1. Install bwrap + switch to `improvements-20261014` + verify** — DONE 2026-10-15 (bwrap 0.12.0; enforcing receipts verified). Voice/strict smoke checks: [x] bash / [ ] voice / [ ] strict.
-- [ ] **2. Full test suite on the 2014 branch** (fresh run; the pre-rebase baseline suite was 13,868 passed / 60 failed, 59 upstream pre-existing).
+- [x] **2. Full test suite on the 2014 branch** — DONE 2026-10-16 (host run,
+  `fullsuite-20261016.log`): 77 failed / 13,870 passed. **12 failures were
+  ours**: the two fork env vars leak from the host environment into upstream's
+  pinned structural tests (4x `test_request_authority` via
+  `ODYSSEUS_CORE_TOOL_GRANTS`, 4x `test_wave3_launch_cost_lifecycle` via
+  `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH`, 4x `test_env_reference` — our vars were
+  missing from `VARIABLE_NOTES`). Fixed `51a5ab5d` (autouse scrubs in the
+  affected test surfaces + env-reference entries + regenerated
+  `website/configuration-reference.md`), verified green with both flags set in
+  the environment. Remaining 65 are upstream-area (browser/JS rendering
+  suites, live-fallback, inspect_media, kimi flake #4) — pre-rebase baseline
+  was 60 failed, so ~5 are new upstream test surface from the rebase's 540
+  commits. Optional re-run to confirm 65:
+  `venv/bin/python -m pytest tests/ -q > fullsuite-20261016b.log 2>&1` (host-side;
+  my sandbox kills the process tree when my command returns — full suite must
+  run from the user's terminal).
 - [ ] **3. Five open upstream PRs** — #6226 #6230 #6232 #6234 #6236. Watch reviews; fold into the next rebase.
 - [ ] **4. Known upstream flake** — kimi full-suite failure (parked since before the rebase; not ours).
-- [ ] **5. Drop-check on next rebase:** `dd900647` (core-tool grants) and the two 2026-10-14/15 patches — drop any fork patch upstream has since fixed properly.
+- [ ] **5. Drop-check on next rebase:** `dd900647` (core-tool grants),
+  `01cece53` (bash-button gate + launch opt-out), and `51a5ab5d` (test
+  hermeticity + env-reference entries for the two fork vars) — drop any fork
+  patch upstream has since fixed properly. Upstream +18 commits since 2026-10-16
+  check touched none of `authority.py`/`process_resources.py`/`containment.py`/
+  `update.sh`; `afecd44d` (approve-once runs ungranted bash/python) is upstream
+  moving in our direction in the *approvals* subsystem — re-check on rebase.
 - [ ] **6. Prune legacy branches** (only after the service has run a few days on the 2014 branch): `Improvements-backup` (00196069), `Improvements-backup-20261012`, `Improvements-backup-20261012-2`, `pre-squash-improvements-20260825`. Dated-branch convention makes these redundant.
 
 ## Conventions (pointers — details in the fork skill + the files)
@@ -91,6 +114,11 @@ must print a real path. Then check voice + strict mode once each.
 - **Skills/memory:** point here; volatile values stay in this file.
 
 ## Session log
+- **2026-10-16 (01:2x):** Full suite (host run) 77 failed / 13,870 passed.
+  12 were ours (fork env vars leaking into upstream's pinned structural tests
+  + missing `VARIABLE_NOTES` entries) → fixed `51a5ab5d`, verified green with
+  both flags set. Remaining ~65 upstream-area (5 more than baseline — new
+  upstream test surface). Optional host-side re-run to confirm.
 - **2026-10-15 (19:0x):** bwrap 0.12.0 installed; probe passed; switched to
   `improvements-20261014` @ `f77a0359` via `./update.sh`; bash containment
   verified enforcing (bubblewrap receipts). Sandbox boundaries probed and
