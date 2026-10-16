@@ -12,6 +12,7 @@ from dataclasses import replace
 from functools import wraps
 from inspect import signature
 import json
+import os
 import re
 from time import perf_counter
 
@@ -209,6 +210,12 @@ def with_completion_gate(func):
     @wraps(func)
     async def wrapped(*args, **kwargs):
         started = perf_counter()
+        # Fork opt-out: stream answer prose as it arrives instead of holding
+        # it until the generator unwinds (pre-wave-3 streaming UX). The
+        # evidence/claim check still runs and still shapes the terminal
+        # event; it simply cannot retract prose that was already released.
+        # Off by default, which keeps upstream's hold-until-gate behavior.
+        live = os.getenv('ODYSSEUS_LIVE_ANSWER_STREAM') == '1'
         first_answer_at = None
         arguments = call_signature.bind(*args, **kwargs)
         arguments.apply_defaults()
@@ -285,6 +292,25 @@ def with_completion_gate(func):
                             if why:
                                 data = {**data, 'data': {**payload, 'question': question}}
                                 chunk = _event(data)
+                    if live and (kind == 'final_response'
+                                 or 'delta' in data
+                                 or isinstance(data.get('thinking'), str)):
+                        # Released now, but answer/has_final keep tracking the
+                        # running text so the terminal gate logic is identical
+                        # to buffered mode (claim check, disclosure, terminal
+                        # enrichment all still run on the full answer).
+                        if first_answer_at is None:
+                            first_answer_at = perf_counter()
+                        if kind == 'final_response':
+                            answer = str(data.get('content') or '')
+                            has_final = True
+                        elif data.get('thinking') is not True and 'delta' in data:
+                            if has_final:
+                                answer = ''
+                                has_final = False
+                            answer += str(data.get('delta') or '')
+                        yield chunk
+                        continue
                     if kind == 'final_response':
                         if first_answer_at is None:
                             first_answer_at = perf_counter()
