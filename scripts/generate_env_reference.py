@@ -492,12 +492,11 @@ VARIABLE_NOTES: dict[str, tuple[str, str, str]] = {
         "tools that execute code, mutate state or cause external side effects need "
         "a separate approval. Set to 0 to opt out.",
     ),
-    "ODYSSEUS_LIVE_ANSWER_STREAM": (
+    "ODYSSEUS_COMPLETION_GATE": (
         "Agent loop and tool execution", USER,
-        "Fork opt-out: stream answer prose as it arrives instead of holding it until the "
-        "completion gate unwinds (restores pre-wave-3 live streaming). The evidence/claim "
-        "check still runs and still shapes the terminal event. Off by default, which keeps "
-        "upstream's hold-until-gate behavior."
+        "Fork opt-out: set to 0 to bypass the completion gate entirely - no answer hold, "
+        "no claim rewriting, no terminal replacement (restores pre-wave-3 streaming). "
+        "Default (unset or 1) keeps upstream's hold + verify + replace behavior."
     ),
     "ODYSSEUS_CORE_TOOL_GRANTS": (
         "Agent loop and tool execution", USER,
