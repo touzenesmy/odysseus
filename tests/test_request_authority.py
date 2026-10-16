@@ -671,3 +671,37 @@ def test_bash_toggle_absent_keeps_upstream_floor(monkeypatch):
     grant = create_request_authority("Testing")
     assert not grant.permits(ExactOperation.normalize("bash", "pwd"))
     assert {g.tool for g in grant.grants} == {"ask_user", "update_plan"}
+
+
+# ── Fork rule: the UI bash toggle also gates the workspace file tools ──
+
+
+def test_bash_toggle_on_grants_file_tools_for_unknown_intent(monkeypatch):
+    """Button ON -> workspace file tools granted for a bare request, so an
+    edit asked for mid-task cannot be denied by intent classification while
+    bash (full workspace access) is granted."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    grant = create_request_authority("Testing",
+        client_runtime_context={"web_ui_state": {"bash": True}})
+    for tool, op in (("read_file", "cat f"), ("write_file", "echo hi > f"),
+                     ("edit_file", "patch f"), ("glob", "**/*.py"),
+                     ("grep", "pattern f")):
+        assert grant.permits(ExactOperation.normalize(tool, op)), tool
+    # python is not a button tool: still intent-gated.
+    assert not grant.permits(ExactOperation.normalize("python", "print(1)"))
+
+
+def test_bash_toggle_on_grants_file_tools_even_when_text_says_nothing(monkeypatch):
+    """The grant does not depend on the message mentioning files."""
+    grant = create_request_authority("continue",
+        client_runtime_context={"web_ui_state": {"bash": True}})
+    assert grant.permits(ExactOperation.normalize("read_file", "cat f"))
+
+
+def test_bash_toggle_absent_keeps_file_tool_floor(monkeypatch):
+    """No stamped web_ui_state -> file tools keep upstream's text-based
+    floor: an ambiguous request grants none of them."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    grant = create_request_authority("Testing")
+    assert not grant.permits(ExactOperation.normalize("read_file", "cat f"))
+    assert not grant.permits(ExactOperation.normalize("write_file", "echo hi > f"))
