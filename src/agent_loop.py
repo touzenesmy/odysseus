@@ -27478,7 +27478,13 @@ async def stream_agent_loop(
                             # the follow-up can become reasoning-only or leak a
                             # truncated closing-think fragment.
                             round_reasoning += data["delta"]
-                            if _qwen38_tool_router:
+                            # Fork opt-out: restore the live thinking stream for
+                            # the Qwen 3.8 tool-router path. Default (flag unset)
+                            # is byte-identical to upstream. Drop on rebase if
+                            # upstream ships a visibility knob.
+                            if _qwen38_tool_router and not os.environ.get(
+                                "ODYSSEUS_SHOW_THINKING"
+                            ):
                                 continue
                         else:
                             _qwen_text_cleanup = (

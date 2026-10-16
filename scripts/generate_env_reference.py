@@ -505,6 +505,13 @@ VARIABLE_NOTES: dict[str, tuple[str, str, str]] = {
         "web_fetch) in addition to ask_user/update_plan. Off by default, which "
         "keeps upstream's floor of ask_user/update_plan only.",
     ),
+    "ODYSSEUS_SHOW_THINKING": (
+        "Agent loop and tool execution", USER,
+        "Fork opt-in: re-stream the model's private thinking deltas to the "
+        "client on the Qwen 3.5/3.8 tool-router path, where upstream hides "
+        "them by default. Internal accumulation is unchanged, so model "
+        "continuation is unaffected. Off by default.",
+    ),
     "ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH": (
         "Agent loop and tool execution", USER,
         "Fork opt-in for single-user self-hosted layouts where the workspace is "

@@ -407,6 +407,14 @@ def create_request_authority(request_text, *, owner=None, session_id=None, works
     _web_ui_state = (client_runtime_context or {}).get("web_ui_state") or {}
     if _web_ui_state.get("bash"):
         tools.add(canonical_tool("bash"))
+        # Fork extension: the bash button is the ONLY request-authority gate
+        # for the workspace file tools too. bash ON already implies full
+        # workspace read/write through bash, so gating file tools on request
+        # text added no power — only denials. File tools OFF/absent keeps
+        # upstream's text-based floor unchanged.
+        tools.update(t for t in (
+            "read_file", "write_file", "edit_file", "apply_patch", "glob", "grep",
+        ))
     grants = []
     for name in sorted(tools | {"ask_user", "update_plan"}):
         name = canonical_tool(name)
