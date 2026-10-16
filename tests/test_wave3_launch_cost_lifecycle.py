@@ -18,6 +18,14 @@ from tests.test_background_resource_identity import seed
 from src.agent_runtime import process_resources as resources
 
 
+@pytest.fixture(autouse=True)
+def _scrub_fork_env_vars(monkeypatch):
+    """The structural guard assertions below pin fork-flag-OFF behavior; keep
+    them hermetic against a host environment that exports the fork opt-outs."""
+    monkeypatch.delenv("ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH", raising=False)
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+
+
 @pytest.mark.parametrize('tool,content', [('bash', 'printf guarded'), ('python', 'print("guarded")')])
 async def test_real_dispatch_scans_workspace_once_per_binding(workspace, monkeypatch, tool, content):
     (workspace / 'child').mkdir()

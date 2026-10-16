@@ -20,6 +20,16 @@ from src.tool_policy import ToolPolicy
 from src.tool_types import ToolBlock
 
 
+@pytest.fixture(autouse=True)
+def _scrub_fork_env_vars(monkeypatch):
+    """Upstream's pinned assertions here encode fork-flag-OFF behavior, so the
+    file must run hermetically: fork opt-in env vars from a host environment
+    (e.g. the server's .env) must never leak in. Fork-specific opt-in tests
+    set their own values via monkeypatch."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    monkeypatch.delenv("ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH", raising=False)
+
+
 def authority(*tools, owner="alice", session_id="s", workspace=""):
     return RequestAuthority("request-test", owner, session_id, workspace,
                             tuple(OperationGrant(tool) for tool in tools))

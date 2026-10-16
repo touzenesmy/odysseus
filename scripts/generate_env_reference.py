@@ -492,6 +492,20 @@ VARIABLE_NOTES: dict[str, tuple[str, str, str]] = {
         "tools that execute code, mutate state or cause external side effects need "
         "a separate approval. Set to 0 to opt out.",
     ),
+    "ODYSSEUS_CORE_TOOL_GRANTS": (
+        "Agent loop and tool execution", USER,
+        "Fork opt-in: when the request intent is unrecognized, grant the "
+        "contract core recovery surface (bash, python, read_file, web_search, "
+        "web_fetch) in addition to ask_user/update_plan. Off by default, which "
+        "keeps upstream's floor of ask_user/update_plan only.",
+    ),
+    "ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH": (
+        "Agent loop and tool execution", USER,
+        "Fork opt-in for single-user self-hosted layouts where the workspace is "
+        "the server's own repository: disables the launch-boundary guard that "
+        "rejects boundaries containing the server's control state, so sandboxed "
+        "process launches can seal against the repo. Off by default.",
+    ),
     "ODYSSEUS_MCP_ALLOWED_COMMANDS": (
         "Agent loop and tool execution", USER,
         "Security-relevant. Comma-separated allowlist of MCP launcher basenames the "

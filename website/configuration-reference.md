@@ -21,7 +21,7 @@ described as a switch that turns something off, the read rejects `0`, `false`,
 `no` and `off` and treats everything else as on. The `Default` column is the
 value the code falls back to when the variable is unset, quoted from the source.
 
-The source tree reads **120** `ODYSSEUS_*` variables: 84 an operator may want to set, and 36 that are internal - sentinels, fixture switches, capture hooks and development tooling. The internal ones are listed too, in their own section, so this page can be checked against the source mechanically.
+The source tree reads **122** `ODYSSEUS_*` variables: 86 an operator may want to set, and 36 that are internal - sentinels, fixture switches, capture hooks and development tooling. The internal ones are listed too, in their own section, so this page can be checked against the source mechanically.
 
 > This page is generated. Edit `scripts/generate_env_reference.py` and
 > re-run it; `tests/test_env_reference.py` enforces that the committed page
@@ -71,6 +71,8 @@ The source tree reads **120** `ODYSSEUS_*` variables: 84 an operator may want to
 
 | Variable | Default | Read in | What it does |
 |---|---|---|---|
+| `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH` | `''` | `src/agent_runtime/process_resources.py` | Fork opt-in for single-user self-hosted layouts where the workspace is the server's own repository: disables the launch-boundary guard that rejects boundaries containing the server's control state, so sandboxed process launches can seal against the repo. Off by default. |
+| `ODYSSEUS_CORE_TOOL_GRANTS` | `''` | `src/agent_runtime/authority.py` | Fork opt-in: when the request intent is unrecognized, grant the contract core recovery surface (bash, python, read_file, web_search, web_fetch) in addition to ask_user/update_plan. Off by default, which keeps upstream's floor of ask_user/update_plan only. |
 | `ODYSSEUS_DISABLE_MCP` | `''` | `src/builtin_mcp.py` | Truthy disables MCP entirely, as an escape hatch for compatibility problems with a server. |
 | `ODYSSEUS_MAX_VISUAL_EVIDENCE_FRAMES` | `'3'` | `src/agent_loop.py` | How many video frames one tool result may contribute. Clamped to 1-8. |
 | `ODYSSEUS_MAX_VISUAL_EVIDENCE_IMAGES` | `'1'` | `src/agent_loop.py` | How many images one tool result may contribute to the model turn. Clamped to 1-8. |
@@ -268,7 +270,7 @@ reads three ways, because no single pattern covers the codebase:
   lines, so one read lives inside a string literal.
 
 The three passes are not redundancy. A line-based grep for a direct
-`os.environ.get("ODYSSEUS_...` call finds 88 of the 120 variables on this
+`os.environ.get("ODYSSEUS_...` call finds 90 of the 122 variables on this
 page. What it misses is reads through an env-reader helper, reads whose call
 spans more than one line, reads whose variable name is held in a module
 constant, and reads through a mapping passed in as an argument - which is the
