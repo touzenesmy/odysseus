@@ -161,7 +161,8 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `dd900647` feat(authority): opt-in CONTRACT_CORE_TOOLS recovery grants for unknown intent (ODYSSEUS_CORE_TOOL_GRANTS)
 - `605db810` docs(specs): commit-map — add authority opt-in + map-commit entries (105 documented)
 - `01cece53` feat(authority): bash button is the only bash gate; opt-out server-home launch guard (ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH)
-- `59015d37` docs(specs): ROADMAP.md — standing work tracker (state, backlog, active issue; update on state change)
+- `59015d37` docs(specs): ROADMAP.md — standing work tracker
+- `f738b263` feat(completion): opt-out live answer streaming (ODYSSEUS_LIVE_ANSWER_STREAM) (state, backlog, active issue; update on state change)
 - `f77a0359` docs(specs): commit-map — ROADMAP entry
 - `51a5ab5d` test(authority): keep fork env vars hermetic in structural tests; document fork env vars in env reference
 - `3ed86515` docs(specs): commit-map + roadmap — full-suite results, 12 fork-caused failures fixed (51a5ab5d)
