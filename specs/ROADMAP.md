@@ -130,6 +130,8 @@ must print a real path. Then check voice + strict mode once each.
   Lesson: at ~70% context, stop and hand off — the ROADMAP is the handoff doc;
   a fresh session starts at ~15% and degrades far less.
 ## Session log
+- **2026-10-16 (04:00-09:00 EDT):** Completion-gate communication fix. The hold-until-gate behavior was NOT the only problem: the gate also REWRITES the terminal answer (claim stripping) and releases it in one burst - that is what the user saw as "mangled". `ODYSSEUS_LIVE_ANSWER_STREAM` (f738b263) was removed (it was non-functional: a duplicate-def bug made the bypass dead code). Replaced by **`ODYSSEUS_COMPLETION_GATE=0`** (15542d9f): whole-gate per-request bypass, .env toggles live, upstream default unchanged, 207 tests pass. .env now sets it. Also noted: new code hides Qwen 3.8 private reasoning from the client by design (agent_loop.py ~27486) - the old "thinking before action" flow is gone upstream-side, separate from the gate.
+
 - **2026-10-16 (01:2x):** Full suite (host run) 77 failed / 13,870 passed.
   12 were ours (fork env vars leaking into upstream's pinned structural tests
   + missing `VARIABLE_NOTES` entries) → fixed `51a5ab5d`, verified green with
