@@ -29,6 +29,11 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(containment, "CONTAINMENT_MODE", containment.MODE_REPORT_ONLY)
     monkeypatch.setattr(containment, "MECHANISMS", tuple(m for m in containment.MECHANISMS if m.name == "process_group"))
     monkeypatch.setattr(tool_execution, "_owner_is_admin", lambda owner: True)
+    # Fork env vars must not leak into these structural tests: their pinned
+    # assertions encode fork-flag-OFF behavior (e.g. the server-home launch
+    # guard must stay active).
+    monkeypatch.delenv("ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH", raising=False)
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
     return work
 
 
