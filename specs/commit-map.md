@@ -164,3 +164,4 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `59015d37` docs(specs): ROADMAP.md — standing work tracker (state, backlog, active issue; update on state change)
 - `f77a0359` docs(specs): commit-map — ROADMAP entry
 - `51a5ab5d` test(authority): keep fork env vars hermetic in structural tests; document fork env vars in env reference
+- `3ed86515` docs(specs): commit-map + roadmap — full-suite results, 12 fork-caused failures fixed (51a5ab5d)

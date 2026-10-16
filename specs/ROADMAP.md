@@ -15,8 +15,8 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-16, ~01:20 EDT)
-- **Running:** `improvements-20261014` @ `51a5ab5d` (rebased + all fork fixes +
+## Status (2026-10-16, ~06:30 EDT)
+- **Running:** `improvements-20261014` @ `3ed86515` (rebased + all fork fixes +
   full-suite test-hermeticity fix;
   == `Improvements` alias == `touzenesmy/Improvements`) — switched 2026-10-15
   ~19:05 EDT via `./update.sh` after bwrap install; bash containment verified
@@ -113,6 +113,19 @@ must print a real path. Then check voice + strict mode once each.
 - **This roadmap:** update Status + Backlog on state change, commit + push.
 - **Skills/memory:** point here; volatile values stay in this file.
 
+- 2026-10-16 ~06:30: b-run confirms the hermeticity fix — 65 failed / 13882 passed
+  (was 77/13870); the 12 removed = exactly the env-leak set (4 request_authority +
+  4 wave3_launch_cost + 4 env_reference); 0 new; all 65 remaining are upstream-area
+  (JS/browser suites, resource identity, live-fallback, inspect_media, kimi flake;
+  baseline pre-rebase was 60 → ~5 new from the rebase's 540 commits of upstream
+  test surface). Fork-patched areas: clean.
+  **Wall-of-text incident (05:52) root cause:** NOT a renderer bug. DB shows the
+  05:52:06 assistant message (the raw pytest dump) came from a 35-min, 30-tool-call
+  turn that STARTED at context_percent=71.5 (qwen3.8-27b, 112K window); the actual
+  work in that turn all succeeded (fix 51a5ab5d + commit 3ed86515 + push) but the
+  model's final answer degenerated into echoing a raw log block that was in context.
+  Lesson: at ~70% context, stop and hand off — the ROADMAP is the handoff doc;
+  a fresh session starts at ~15% and degrades far less.
 ## Session log
 - **2026-10-16 (01:2x):** Full suite (host run) 77 failed / 13,870 passed.
   12 were ours (fork env vars leaking into upstream's pinned structural tests
