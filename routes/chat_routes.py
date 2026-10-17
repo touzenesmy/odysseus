@@ -3558,6 +3558,23 @@ def setup_chat_routes(
         # backstop if any agent path is ever reached for a strict turn.)
         if strict_chat:
             disabled_tools.update(strict_chat_disabled_tools())
+        # Fork: tool-group buttons (Backlog #1, gate ODYSSEUS_TOOL_GROUPS=1).
+        # The `tool_groups` wire key carries the ticked group names (comma
+        # list); the bash group also lights from the existing allow_bash
+        # toggle. A ticked group is a floor: its tools are never stripped
+        # from the policy, whatever RAG or intent strips say below — the
+        # button is the user's word. Gate OFF: block is a no-op.
+        if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+            from src.agent_runtime.authority import BUTTON_TOOLS
+            _tool_groups_on = {
+                str(g).strip().lower()
+                for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                if str(g).strip().lower()
+            }
+            if allow_bash is not None and str(allow_bash).lower() == "true":
+                _tool_groups_on.add("bash")
+            for _g in _tool_groups_on:
+                disabled_tools.difference_update(BUTTON_TOOLS.get(_g, ()))
         tool_policy = build_effective_tool_policy(
             disabled_tools=disabled_tools,
             last_user_message=message,
@@ -3590,6 +3607,15 @@ def setup_chat_routes(
                 "manage_documents", "create_document", "edit_document", "update_document",
             }.issubset(disabled_tools),
         }
+        if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+            # Fork: per-group effective state for the authority grant.
+            # "web"/"bash" keys already carry those groups (the floor above
+            # keeps them out of disabled_tools when ticked); the rest are new.
+            client_runtime_context["web_ui_state"].update({
+                "sessions": "list_sessions" not in disabled_tools,
+                "media": "inspect_media" not in disabled_tools,
+                "browser": "private_browser" not in disabled_tools,
+            })
         # Capture permission state before schema selection/reconciliation.
         # Only deterministic request intent supplies grants, never inventory.
         _request_authority = request_authority_for_http(
@@ -4627,6 +4653,22 @@ def setup_chat_routes(
                         if _forced_tools is None:
                             _forced_tools = set()
                         _forced_tools.add("bash")
+                    # Fork: same force-include floor for every ticked
+                    # tool-group button, whatever RAG selection drops.
+                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        _tg = {
+                            str(g).strip().lower()
+                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                            if str(g).strip().lower()
+                        }
+                        if allow_bash is not None and str(allow_bash).lower() == "true":
+                            _tg.add("bash")
+                        for _g in _tg:
+                            if _g in BUTTON_TOOLS:
+                                if _forced_tools is None:
+                                    _forced_tools = set()
+                                _forced_tools.update(BUTTON_TOOLS[_g])
                     # A globally enabled web toggle must not erase the typed
                     # state tool selected for an unrelated personal action.
                     # Otherwise words such as "today" make a calendar create
