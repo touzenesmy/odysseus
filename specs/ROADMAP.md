@@ -15,21 +15,22 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-16, ~19:40 EDT)
-- **Local branch `Improvements` (working tree) @ `52cf20cd`** — rebased + all
-  fork fixes. Since the last push (`9164b030`): `821c55fd` (stall diagnosis),
-  `383c6ca7` (bash button now ALSO gates workspace file tools read/write/
-  edit/patch/glob/grep — file tools no longer denied by text-guessing while
-  bash is ON; + `ODYSSEUS_SHOW_THINKING=1` restores the Qwen 3.8 thinking
-  stream upstream hides — both fork opt-outs, default upstream), `52cf20cd`
-  (map). **NOT YET PUSHED — sandbox ssh cannot; user runs the push.**
-  NOTE: dated branch `improvements-20261014` + remote still at `9164b030`;
-  re-point `git branch -f improvements-20261014 Improvements` after push.
-  `.env` flags: CORE_TOOL_GRANTS=1, SERVER_HOME_LAUNCH=1,
-  COMPLETION_GATE=0, SHOW_THINKING=1 (line 29).
-- **Running service:** restarted 2026-10-16 15:29 EDT with the transcript-
-  wall fix; verify what code the running PID loaded before assuming the
-  unpushed commits are live.
+## Status (2026-10-16, ~22:10 EDT)
+- **Branch `Improvements` = `improvements-20261014` = remote @ `f4c4681c`**
+  — rebased + all fork fixes, PUSHED + synced (tree clean). Since
+  `9164b030`: `821c55fd` (stall diagnosis), `383c6ca7` (bash button now ALSO
+  gates workspace file tools read/write/edit/patch/glob/grep — file tools no
+  longer denied by text-guessing while bash is ON; + `ODYSSEUS_SHOW_THINKING=1`
+  restores the Qwen 3.8 thinking stream upstream hides), `f4c4681c` (thinking
+  fix PART 2: tool-profile models force `thinking_mode=off` so the ROUTE
+  gates drop thinking too — loop gate alone was insufficient; all 4 route
+  gates now honor the flag). Both are fork opt-outs, default upstream,
+  drop-check at next rebase. `.env` flags: CORE_TOOL_GRANTS=1,
+  SERVER_HOME_LAUNCH=1, COMPLETION_GATE=0, SHOW_THINKING=1 (line 29).
+- **Running service:** restarted 2026-10-16 ~20:00 EDT at `f4c4681c`.
+  **THINKING STREAM CONFIRMED LIVE by user (2026-10-16 22:05 EDT)** —
+  "Oh, I see thinking now!" Batch closed: transcript-wall fix, completion
+  gate bypass, file-tool button gate, thinking stream all working.
 - **Known behaviors (diagnosed, verified in app.log + chat_messages):**
   1. "Stalls" are mostly SLOW turns (200–285s/round, 27B q3 on 16GB VRAM)
      with thinking hidden → invisible work. FIXED in code by SHOW_THINKING

@@ -168,3 +168,4 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `51a5ab5d` test(authority): keep fork env vars hermetic in structural tests; document fork env vars in env reference
 - `3ed86515` docs(specs): commit-map + roadmap — full-suite results, 12 fork-caused failures fixed (51a5ab5d)
 - `383c6ca7` feat(authority): bash button also gates workspace file tools (read/write/edit/patch/glob/grep); ODYSSEUS_SHOW_THINKING=1 restores Qwen thinking stream (fork opt-outs, default upstream)
+- `f4c4681c` fix(chat): ODYSSEUS_SHOW_THINKING also bypasses route-level thinking_mode=off gates (tool-profile models force thinking_mode=off; loop gate alone was insufficient — thinking verified live by user 2026-10-16)
