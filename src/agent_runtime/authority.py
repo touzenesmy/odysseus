@@ -363,6 +363,26 @@ def interpret_request(request_text, *, history=(), workspace=None, active_docume
     return SemanticIntent(families, selected, required_read_operation_for_request(request_text, history))
 
 
+# Fork: tool-group buttons (Backlog #1; gate ODYSSEUS_TOOL_GROUPS=1). Server-side
+# source of truth for the button row: group -> tools granted when the user ticks
+# that group's toggle. The UI renders its own JS copy (app.js/chat.js); this map
+# drives (a) the request-authority grant in create_request_authority and (b) the
+# selection floor in routes/chat_routes.py (an ON group's tools are discarded from
+# disabled_tools so RAG can never strip them). The `bash` entry mirrors the
+# pre-existing hardcoded bash-button grant in create_request_authority (kept
+# verbatim so gate-OFF stays byte-identical); it is listed here so the floor and
+# the UI stay uniform across all five groups. `browser` uses the canonical
+# `private_browser` name; the MCP wire names (mcp__builtin_browser__*) are
+# resolved in the chat_routes floor.
+BUTTON_TOOLS = {
+    "bash": ("bash", "read_file", "write_file", "edit_file", "apply_patch", "glob", "grep"),
+    "sessions": ("list_sessions", "search_chats", "create_session", "manage_session", "send_to_session"),
+    "web": ("web_search", "web_fetch"),
+    "media": ("inspect_media", "transcribe_media", "extract_text"),
+    "browser": ("private_browser",),
+}
+
+
 def create_request_authority(request_text, *, owner=None, session_id=None, workspace=None,
                              history=(), policy=None, active_document=False,
                              image_attachment=False, capabilities=None, client_runtime_context=None):
@@ -405,7 +425,19 @@ def create_request_authority(request_text, *, owner=None, session_id=None, works
     #         below denies it even if it also landed in `tools`.
     # The grant and the denial both reduce to one value: the button.
     _web_ui_state = (client_runtime_context or {}).get("web_ui_state") or {}
-    if _web_ui_state.get("bash"):
+    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+        # Fork opt-in (ODYSSEUS_TOOL_GROUPS=1): the web_ui_state stamp is a
+        # per-group map keyed by BUTTON_TOOLS. An ON group grants every tool
+        # in its entry, whatever the request text is (intent classification
+        # can never revoke a ticked toggle); OFF/absent leaves the group's
+        # tools in the policy's disabled set, so restrict() denies them.
+        # The bash entry is the same tool set as the gate-OFF bash block
+        # below, so the gate-OFF path stays byte-identical to the
+        # pre-feature behavior.
+        for _group, _group_tools in BUTTON_TOOLS.items():
+            if _web_ui_state.get(_group):
+                tools.update(_group_tools)
+    elif _web_ui_state.get("bash"):
         tools.add(canonical_tool("bash"))
         # Fork extension: the bash button is the ONLY request-authority gate
         # for the workspace file tools too. bash ON already implies full
