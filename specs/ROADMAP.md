@@ -166,6 +166,52 @@ must print a real path. Then check voice + strict mode once each.
   subsystem — re-check on rebase.
 - [ ] **7. Prune legacy branches** (only after the service has run a few days on the 2014 branch): `Improvements-backup` (00196069), `Improvements-backup-20261012`, `Improvements-backup-20261012-2`, `pre-squash-improvements-20260825`. Dated-branch convention makes these redundant.
 
+## Design — tool-group buttons (2026-10-17 ~04:30 EDT; seams live-verified, no code yet)
+Backlog #1. Requirements (exact spec): see Backlog item 1 above. Gate: `ODYSSEUS_TOOL_GROUPS=1`;
+unset = byte-identical current behavior. Groups: bash/sessions/web/media/browser; all-OFF default
+when ON; per-session UI persistence; grant = unlimited within the group's tools; floor = RAG can
+never strip a button-ON group's tools.
+
+Verified seam map (line numbers as of `a15d8ab9`):
+- UI registry pattern: `static/app.js` `MODE_TOOLS` (~:1771) `[{btnId, checkboxId, stateKey}]`
+  (web/bash/docs) + per-mode persistence (`loadToolPref`/`saveToolPref` via Storage module) +
+  `TOOL_TOGGLE_TOAST_LABELS`. Generalization point for the group row.
+- Name collision: `static/js/assistant.js:122` `TOOL_GROUPS` is the assistant-settings
+  *enabled_tools selector* (Email/Calendar/… categories) — different feature. Our map must be
+  named differently (spec: `BUTTON_TOOLS`).
+- UI→server stamp: `static/js/chat.js:2637-2638` (`fd.append('allow_bash')` +
+  workspaceAgentIntent force-true); `static/js/compare/stream.js:440` sends `'true'` (compare view).
+- Server read: `routes/chat_routes.py:2504` (form → JSON-body fallback); forced `'true'` at
+  :2692/:2890/:2993 (agent-intent paths).
+- Policy accumulation: chat_routes.py ~:3336-3410 — allow_bash→disabled_tools('bash') gate :3340;
+  `allow_documents`→DOCUMENT_TOOL_NAMES ~:3404; `_bash_explicitly_on` :3401 (survives intent strips).
+- Floor seam: chat_routes.py ~:4625-4626 — existing bash strip-exemption
+  ("allow_bash explicitly true → not stripped"). Generalize to per-group discard from disabled_tools.
+- Route→authority stamp: chat_routes.py:3583 `client_runtime_context["web_ui_state"] = {...}`
+  (server-side effective policy; the client's raw value never reaches authority).
+- Authority grant: `src/agent_runtime/authority.py:397-412` — `web_ui_state.bash` → grant bash +
+  6 workspace file tools (fork rule: button is the ONLY request-authority gate for bash;
+  ON → grant whatever the text says; OFF → `restrict()` denies). Fork opt-in env precedent:
+  `ODYSSEUS_CORE_TOOL_GRANTS` block directly above.
+- Selection path (RAG): `src/turn_contract.py` `selected_tools_for_request` — intersects with intent
+  inside `create_request_authority` (`tools &= selected`). Floor must apply AFTER that intersection.
+- Tests: `tests/test_chat_route_tool_policy.py` mirrors the route's inline logic + source-string
+  asserts against chat_routes.py — keep asserted strings stable or update tests in the same commit.
+
+Implementation plan (bounded turns):
+1. authority.py: `BUTTON_TOOLS` = {group: [tools…]} (5 groups); read per-group stamp from
+   `web_ui_state` → add all tools of ON groups. Gate OFF ⇒ block is a no-op.
+2. chat_routes.py: generalize the allow_bash read/stamp to per-group (keep the `allow_bash` wire
+   key working with gate OFF); floor = discard BUTTON_TOOLS[group] from disabled_tools for each
+   ON group (generalizes the :4626 exemption).
+3. UI: config-driven group row in app.js (MODE_TOOLS pattern) + per-session persistence (existing
+   Storage pattern); cache-buster bump in ALL refs (index.html ×2 + JS import) — grep old URL first.
+4. Tests: mirror test_chat_route_tool_policy.py — gate-OFF byte-identical cases + gate-ON
+   grant/floor cases.
+
+Open (verify first thing in impl turn 1): exact `web_ui_state` dict contents at chat_routes.py:3583;
+the function enclosing :3336-3410 (name + signature) so tests can call it directly.
+
 ## Conventions (pointers — details in the fork skill + the files)
 - **Dated branches:** `improvements-<YYYYMMDD>` per rebase; `Improvements` is a
   moving alias (`git branch -f Improvements improvements-<date>`); the previous
@@ -246,3 +292,4 @@ Three distinct causes, all confirmed in data — "stall" is NOT one bug:
 2. **Cancel semantics (rebase-born, 11ed6f13 + 1928f283 close-path):** any client disconnect (phone lock, tab switch, stop button, hard refresh) cancels the running turn -> UI error + `cancelled: true` row in DB (e.g. 19:23:18Z, dead in 6s). Clean; nothing lost; just resend.
 3. **Context-overload degeneration (the wall-of-text):** long turns starting >70% ctx make the final answer collapse into raw log dumps. Rules: fresh session per work block; keep turns <= ~10 tool calls; hand off via ROADMAP at ~70% ctx.
 Rules: no refresh/lock/tab-switch mid-turn; fresh session per work block; if a turn dies -> just resend.
+### 2026-10-17 ~04:35 EDT — Tool-group buttons: design pass. All seams live-verified (app.js MODE_TOOLS ~:1771; assistant.js:122 name collision; chat.js:2637; chat_routes.py :2504/:3340/:3401/:3583/:4626; authority.py :397-412; turn_contract.selected_tools_for_request). Design section written. CORRECTION: src/agent_runtime/authority.py + src/turn_contract.py DO exist in the fork (earlier "does not exist" note was a path-miss, not absence). No code changed. Next: impl turn 1 — read chat_routes.py:3583 dict + enclosing function, then authority.py BUTTON_TOOLS.
