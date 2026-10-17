@@ -162,6 +162,7 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `605db810` docs(specs): commit-map — add authority opt-in + map-commit entries (105 documented)
 - `01cece53` feat(authority): bash button is the only bash gate; opt-out server-home launch guard (ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH)
 - `15542d9f` feat(completion): ODYSSEUS_COMPLETION_GATE=0 bypasses the whole gate (replaces non-functional LIVE_ANSWER_STREAM flag)
+- `9164b030` fix(completion): bypass rewrite keeps terminal bubble = streamed prose (transcript-wall fix — the terminal final_response carried the full round transcript incl. tool output, so any tool turn collapsed into one wall)
 - `59015d37` docs(specs): ROADMAP.md — standing work tracker
 - `f738b263` feat(completion): opt-out live answer streaming (ODYSSEUS_LIVE_ANSWER_STREAM) (state, backlog, active issue; update on state change)
 - `f77a0359` docs(specs): commit-map — ROADMAP entry

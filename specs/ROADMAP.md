@@ -15,8 +15,8 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-16, ~22:10 EDT)
-- **Branch `Improvements` = `improvements-20261014` = remote @ `f4c4681c`**
+## Status (2026-10-16, ~23:10 EDT)
+- **Branch `Improvements` = `improvements-20261014` = remote @ `b496cb6a`**
   — rebased + all fork fixes, PUSHED + synced (tree clean). Since
   `9164b030`: `821c55fd` (stall diagnosis), `383c6ca7` (bash button now ALSO
   gates workspace file tools read/write/edit/patch/glob/grep — file tools no
@@ -117,13 +117,19 @@ must print a real path. Then check voice + strict mode once each.
   run from the user's terminal).
 - [ ] **3. Five open upstream PRs** — #6226 #6230 #6232 #6234 #6236. Watch reviews; fold into the next rebase.
 - [ ] **4. Known upstream flake** — kimi full-suite failure (parked since before the rebase; not ours).
-- [ ] **5. Drop-check on next rebase:** `f738b263` (live answer streaming opt-out),
-  `dd900647` (core-tool grants), `01cece53` (bash-button gate + launch opt-out),
-  and `51a5ab5d` (test hermeticity + env-reference entries) — drop any fork
-  patch upstream has since fixed properly. Upstream +18 commits since 2026-10-16
+- [ ] **5. Drop-check on next rebase** — current fork opt-out set (all default-upstream, env-gated):
+  - `15542d9f` `ODYSSEUS_COMPLETION_GATE=0` (whole-gate bypass; supersedes+replaces REMOVED `f738b263` LIVE_ANSWER_STREAM)
+  - `9164b030` terminal-bubble = streamed prose (transcript-wall fix; rides the gate bypass)
+  - `dd900647` `ODYSSEUS_CORE_TOOL_GRANTS` (unknown-intent recovery grants)
+  - `01cece53` bash-button-as-only-gate + `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH`
+  - `383c6ca7` bash button ALSO gates file tools + `ODYSSEUS_SHOW_THINKING` (loop gate)
+  - `f4c4681c` `ODYSSEUS_SHOW_THINKING` route gates (bypass thinking_mode=off)
+  - `51a5ab5d` test hermeticity + env-reference entries (fork-specific, not an opt-out)
+  Drop any upstream has since fixed properly. Upstream +18 since the 2026-10-16
   check touched none of `authority.py`/`process_resources.py`/`containment.py`/
-  `update.sh`; `afecd44d` (approve-once runs ungranted bash/python) is upstream
-  moving in our direction in the *approvals* subsystem — re-check on rebase.
+  `completion.py`/`agent_loop.py`/`chat_routes.py`/`update.sh`; `afecd44d`
+  (approve-once) is upstream moving in our direction in the *approvals*
+  subsystem — re-check on rebase.
 - [ ] **6. Prune legacy branches** (only after the service has run a few days on the 2014 branch): `Improvements-backup` (00196069), `Improvements-backup-20261012`, `Improvements-backup-20261012-2`, `pre-squash-improvements-20260825`. Dated-branch convention makes these redundant.
 
 ## Conventions (pointers — details in the fork skill + the files)
@@ -149,6 +155,24 @@ must print a real path. Then check voice + strict mode once each.
   Lesson: at ~70% context, stop and hand off — the ROADMAP is the handoff doc;
   a fresh session starts at ~15% and degrades far less.
 ## Session log
+- **2026-10-16 (~23:00 EDT):** Thinking-stream batch CLOSED + verified live.
+  User confirmed: **agent mode shows thinking** (restored by SHOW_THINKING),
+  **chat/strict stay clean** — intended: the flag only lifts the *forced*
+  Qwen-3.8 tool-router hide; chat/strict use the normal per-chat thinking toggle
+  (default off), so they behave like stock. **The fork opt-out pattern** (all
+  default-upstream, env-gated, drop-check at rebase) is now 4 flags in `.env`:
+  `ODYSSEUS_COMPLETION_GATE=0` (15542d9f + 9164b030 transcript-wall),
+  `ODYSSEUS_CORE_TOOL_GRANTS=1` (dd900647), `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH=1`
+  (01cece53), `ODYSSEUS_SHOW_THINKING=1` (383c6ca7 loop gate + f4c4681c route
+  gates). **Branch drift fixed:** `improvements-20261014` re-pointed to the
+  alias (it had drifted 1 commit behind). **Memory superseded:** the old
+  project memory's "blocker = bwrap not installed" is GONE (running
+  bwrap-enforcing since 2026-10-15); running = improvements-20261014 @ b496cb6a.
+  **Follow-up:** skill `user-odysseus-fork` does NOT yet capture the opt-out
+  flag pattern (it's write-protected — needs the full user-skill-management
+  procedure: gate → backup → view → edit → verify → bump); do that, don't patch
+  it ad hoc.
+
 - **2026-10-16 (04:00-09:00 EDT):** Completion-gate communication fix. The hold-until-gate behavior was NOT the only problem: the gate also REWRITES the terminal answer (claim stripping) and releases it in one burst - that is what the user saw as "mangled". `ODYSSEUS_LIVE_ANSWER_STREAM` (f738b263) was removed (it was non-functional: a duplicate-def bug made the bypass dead code). Replaced by **`ODYSSEUS_COMPLETION_GATE=0`** (15542d9f): whole-gate per-request bypass, .env toggles live, upstream default unchanged, 207 tests pass. .env now sets it. Also noted: new code hides Qwen 3.8 private reasoning from the client by design (agent_loop.py ~27486) - the old "thinking before action" flow is gone upstream-side, separate from the gate.
 
 - **2026-10-16 (01:2x):** Full suite (host run) 77 failed / 13,870 passed.
