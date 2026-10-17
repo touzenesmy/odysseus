@@ -4263,7 +4263,7 @@ def setup_chat_routes(
                                     # indicator, but don't fold them into the saved
                                     # reply (mirrors the rewrite path below).
                                     if data.get("thinking"):
-                                        if thinking_mode == "off":
+                                        if thinking_mode == "off" and not os.environ.get("ODYSSEUS_SHOW_THINKING"):
                                             continue
                                         thinking_response += data["delta"]
                                     else:
@@ -4724,7 +4724,7 @@ def setup_chat_routes(
                                     # Forward them for the live indicator, but keep
                                     # them out of the saved reply (same as chat mode).
                                     if data.get("thinking"):
-                                        if thinking_mode == "off":
+                                        if thinking_mode == "off" and not os.environ.get("ODYSSEUS_SHOW_THINKING"):
                                             continue
                                         thinking_response += data["delta"]
                                     else:
@@ -4808,7 +4808,7 @@ def setup_chat_routes(
                                     yield f'data: {json.dumps(data)}\n\n'
                                 elif data.get("type") == "agent_terminal":
                                     terminal_metadata = _render_state.metadata(data.get("data"))
-                                    if thinking_mode == "off":
+                                    if thinking_mode == "off" and not os.environ.get("ODYSSEUS_SHOW_THINKING"):
                                         terminal_metadata.pop("thinking", None)
                                     last_metrics = terminal_metadata
                                     failure = terminal_metadata.get("failure") or {}
@@ -4851,7 +4851,7 @@ def setup_chat_routes(
                                     yield chunk
                                 elif data.get("type") == "metrics":
                                     last_metrics = _render_state.metadata(data.get("data"))
-                                    if thinking_mode == "off":
+                                    if thinking_mode == "off" and not os.environ.get("ODYSSEUS_SHOW_THINKING"):
                                         last_metrics.pop("thinking", None)
                                     _reported_model = last_metrics.get("model")
                                     last_metrics["requested_model"] = last_metrics.get("requested_model") or _requested_model
