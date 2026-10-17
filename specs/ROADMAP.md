@@ -98,8 +98,42 @@ must print a real path. Then check voice + strict mode once each.
 `git checkout --detach improvements-20261012 && sudo systemctl restart odysseus`
 
 ## Backlog
-- [x] **1. Install bwrap + switch to `improvements-20261014` + verify** — DONE 2026-10-15 (bwrap 0.12.0; enforcing receipts verified). Voice/strict smoke checks: [x] bash / [ ] voice / [ ] strict.
-- [x] **2. Full test suite on the 2014 branch** — DONE 2026-10-16 (host run,
+- [ ] **1. Tool-group buttons — replace RAG *guessing* for core tool families (TOP PRIORITY, user directive 2026-10-17).**
+  Generalize the existing bash button into a data-driven **tool-group button row** so
+  tool grants are *explicit user intent* (a click), not per-message RAG retrieval +
+  text-classification. Solves the three recurring pains: (a) file tools "denied even
+  though bash is on", (b) a fresh session "can't see other sessions", (c) RAG
+  retrieval lottery (a tool is granted only if retrieval surfaces it AND the message
+  text classifies into its family). **Two layers must both be hit** — retrieval
+  (force-include the group's tools into selection so the model can see them) and
+  permission (grant them in the authority layer).
+  - **`BUTTON_TOOLS` map** in `authority.py`: `group -> [tool, ...]`. Start:
+    `bash` (existing: bash + read/write/edit/apply/glob/grep), `sessions`
+    (list_sessions, search_chats, create_session, manage_session, send_to_session),
+    `web` (web_search, web_fetch), `media` (inspect_media, transcribe_media,
+    extract_text), `browser` (the `mcp__builtin_browser__*` family). Add more only
+    when a real session needs one.
+  - **UI** (chat.js): a toggle row next to the existing Bash toggle, per-session
+    persisted, **default all OFF** (only Bash keeps its current default).
+  - **Request stamp** = list of active groups (same plumbing as the existing bash
+    stamp that `authority.py` already reads).
+  - **Grant** in `authority.py`: each active group's tools are granted
+    (actions=None, inputs=None = unlimited within the tool, like Bash today).
+  - **Selection floor** in the tool-selection path: active groups' tools are always
+    offered (RAG may ADD extras but may never REMOVE a button-ON tool). This is the
+    actual "bypass RAG" — RAG loses veto over explicitly-enabled tools.
+  - **Gate:** `ODYSSEUS_TOOL_GROUPS=1`, default OFF = byte-identical upstream
+    (every group OFF, no stamp). Drop-check on rebase.
+  - **Context cost (honest):** each ON group adds its tool schemas to every round
+    (~13.7K chars for the 14 tools sent today; email-family ~25 tools is the big
+    one). UI should make ON groups visible; habit = enable what the session needs,
+    disable after. That's *better* than RAG — the context tax is paid deliberately.
+  - **Watch upstream `afecd44d` (approve-once / sticky approval)** before finalizing
+    — our buttons are the pre-configured version of that; if upstream ships a native
+    group toggle, prefer it.
+  - **Build in a fresh, low-context session** (this session's context is degraded).
+- [x] **2. Install bwrap + switch to `improvements-20261014` + verify** — DONE 2026-10-15 (bwrap 0.12.0; enforcing receipts verified). Voice/strict smoke checks: [x] bash / [ ] voice / [ ] strict.
+- [x] **3. Full test suite on the 2014 branch** — DONE 2026-10-16 (host run,
   `fullsuite-20261016.log`): 77 failed / 13,870 passed. **12 failures were
   ours**: the two fork env vars leak from the host environment into upstream's
   pinned structural tests (4x `test_request_authority` via
@@ -115,9 +149,9 @@ must print a real path. Then check voice + strict mode once each.
   `venv/bin/python -m pytest tests/ -q > fullsuite-20261016b.log 2>&1` (host-side;
   my sandbox kills the process tree when my command returns — full suite must
   run from the user's terminal).
-- [ ] **3. Five open upstream PRs** — #6226 #6230 #6232 #6234 #6236. Watch reviews; fold into the next rebase.
-- [ ] **4. Known upstream flake** — kimi full-suite failure (parked since before the rebase; not ours).
-- [ ] **5. Drop-check on next rebase** — current fork opt-out set (all default-upstream, env-gated):
+- [ ] **4. Five open upstream PRs** — #6226 #6230 #6232 #6234 #6236. Watch reviews; fold into the next rebase.
+- [ ] **5. Known upstream flake** — kimi full-suite failure (parked since before the rebase; not ours).
+- [ ] **6. Drop-check on next rebase** — current fork opt-out set (all default-upstream, env-gated):
   - `15542d9f` `ODYSSEUS_COMPLETION_GATE=0` (whole-gate bypass; supersedes+replaces REMOVED `f738b263` LIVE_ANSWER_STREAM)
   - `9164b030` terminal-bubble = streamed prose (transcript-wall fix; rides the gate bypass)
   - `dd900647` `ODYSSEUS_CORE_TOOL_GRANTS` (unknown-intent recovery grants)
@@ -130,7 +164,7 @@ must print a real path. Then check voice + strict mode once each.
   `completion.py`/`agent_loop.py`/`chat_routes.py`/`update.sh`; `afecd44d`
   (approve-once) is upstream moving in our direction in the *approvals*
   subsystem — re-check on rebase.
-- [ ] **6. Prune legacy branches** (only after the service has run a few days on the 2014 branch): `Improvements-backup` (00196069), `Improvements-backup-20261012`, `Improvements-backup-20261012-2`, `pre-squash-improvements-20260825`. Dated-branch convention makes these redundant.
+- [ ] **7. Prune legacy branches** (only after the service has run a few days on the 2014 branch): `Improvements-backup` (00196069), `Improvements-backup-20261012`, `Improvements-backup-20261012-2`, `pre-squash-improvements-20260825`. Dated-branch convention makes these redundant.
 
 ## Conventions (pointers — details in the fork skill + the files)
 - **Dated branches:** `improvements-<YYYYMMDD>` per rebase; `Improvements` is a
@@ -155,6 +189,7 @@ must print a real path. Then check voice + strict mode once each.
   Lesson: at ~70% context, stop and hand off — the ROADMAP is the handoff doc;
   a fresh session starts at ~15% and degrades far less.
 ## Session log
+- **2026-10-17 ~02:50 EDT:** Backlog re-prioritized per user directive: new **item 1 (TOP PRIORITY)** = tool-group buttons (generalize the bash button into a data-driven group row — `BUTTON_TOOLS` map, stamp, grants, selection floor, `ODYSSEUS_TOOL_GROUPS` gate; spec inlined above). Build in a fresh low-context session; watch upstream `afecd44d` approve-once first. Also logged this session's degeneration incident: 36-min 24-round turn peaked at ~70% context, then a repeating no-tool-call loop (20+ min, same text) that produced a garbage `rm -rf /` tool call — blocked twice (rm's own `--no-preserve-root` refusal + bwrap confinement), zero damage. Confirmed `rm` was sampling breakdown, not intent; compaction threshold (0.85) is an overflow guard and does not catch sub-threshold repetition loops — candidate fork: no-progress circuit breaker (N consecutive zero-tool-call rounds → clean early exit). New-session authority finding: grants are per-message (sealed at `create_request_authority`), no mid-turn upgrades — the "new session can't see other sessions" wall is the RAG-retrieval + text-classification combo the button feature replaces.
 - **2026-10-16 (~23:00 EDT):** Thinking-stream batch CLOSED + verified live.
   User confirmed: **agent mode shows thinking** (restored by SHOW_THINKING),
   **chat/strict stay clean** — intended: the flag only lifts the *forced*
