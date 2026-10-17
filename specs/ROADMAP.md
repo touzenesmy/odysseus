@@ -15,7 +15,7 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-16, ~23:10 EDT)
+## Status (2026-10-17, ~04:40 EDT)
 - **Branch `Improvements` = `improvements-20261014` = remote @ `b496cb6a`**
   — rebased + all fork fixes, PUSHED + synced (tree clean). Since
   `9164b030`: `821c55fd` (stall diagnosis), `383c6ca7` (bash button now ALSO
