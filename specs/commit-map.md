@@ -171,3 +171,5 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `383c6ca7` feat(authority): bash button also gates workspace file tools (read/write/edit/patch/glob/grep); ODYSSEUS_SHOW_THINKING=1 restores Qwen thinking stream (fork opt-outs, default upstream)
 - `f4c4681c` fix(chat): ODYSSEUS_SHOW_THINKING also bypasses route-level thinking_mode=off gates (tool-profile models force thinking_mode=off; loop gate alone was insufficient — thinking verified live by user 2026-10-16)
 - `c11e7d12` docs(specs): ROADMAP — tool-group buttons design pass (verified seam map + impl plan)
+- `ca25a35c` docs(specs): commit-map + ROADMAP status — design commit c11e7d12
+- `175073ca` feat(authority): tool-group buttons — ODYSSEUS_TOOL_GROUPS-gated per-group grant (BUTTON_TOOLS map)

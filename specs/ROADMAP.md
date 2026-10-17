@@ -15,9 +15,9 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-17, ~04:40 EDT)
-- **Branch `Improvements` = `improvements-20261014` = remote @ `b496cb6a`**
-  — rebased + all fork fixes, PUSHED + synced (tree clean). Since
+## Status (2026-10-17, ~18:40 EDT)
+- **Branch `Improvements` = `improvements-20261014` @ `175073ca` (local) — ahead 4 of remote `a15d8ab9` (UNPUSHED: c11e7d12, ca25a35c, 175073ca, +this docs commit)**
+  — rebased + all fork fixes, tree clean. Tool-group buttons (Backlog #1) IMPL slice 1/4 landed: `175073ca`. Since
   `9164b030`: `821c55fd` (stall diagnosis), `383c6ca7` (bash button now ALSO
   gates workspace file tools read/write/edit/patch/glob/grep — file tools no
   longer denied by text-guessing while bash is ON; + `ODYSSEUS_SHOW_THINKING=1`
@@ -293,3 +293,4 @@ Three distinct causes, all confirmed in data — "stall" is NOT one bug:
 3. **Context-overload degeneration (the wall-of-text):** long turns starting >70% ctx make the final answer collapse into raw log dumps. Rules: fresh session per work block; keep turns <= ~10 tool calls; hand off via ROADMAP at ~70% ctx.
 Rules: no refresh/lock/tab-switch mid-turn; fresh session per work block; if a turn dies -> just resend.
 ### 2026-10-17 ~04:35 EDT — Tool-group buttons: design pass. All seams live-verified (app.js MODE_TOOLS ~:1771; assistant.js:122 name collision; chat.js:2637; chat_routes.py :2504/:3340/:3401/:3583/:4626; authority.py :397-412; turn_contract.selected_tools_for_request). Design section written. CORRECTION: src/agent_runtime/authority.py + src/turn_contract.py DO exist in the fork (earlier "does not exist" note was a path-miss, not absence). No code changed. Next: impl turn 1 — read chat_routes.py:3583 dict + enclosing function, then authority.py BUTTON_TOOLS.
+### 2026-10-17 ~18:40 EDT — Tool-group buttons impl slice 1/4: `BUTTON_TOOLS` map (5 groups) + `ODYSSEUS_TOOL_GROUPS`-gated per-group grant in `create_request_authority` (`175073ca`). Gate-OFF byte-identical — 70/70 tests/test_request_authority.py pass (venv/bin/python). Next: slice 2 = chat_routes per-group stamp + selection floor.
