@@ -181,3 +181,6 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `83185b20` test(fork): tool-group buttons — gate-ON grant tests + route/UI source pins (slice 4/4)
 - `be4573cd` docs(specs): commit-map + ROADMAP — tool-group buttons slice 4/4 (83185b20); feature complete
 - `6d255cf2` docs(specs): ROADMAP — pre-push double-check PASSED (all 4 slices verified, 708/708 targeted)
+
+- `33de6e61` docs(specs): commit-map gap fix + push-name rule check + dated-branch sync to alias
+- `d4925ca4` fix(tools): tick-wins — ceiling for unticked groups + force-include after clobbers (Backlog #1, slice 2.5)
