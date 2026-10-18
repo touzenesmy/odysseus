@@ -884,8 +884,10 @@ def test_tool_groups_wire_key_is_read_from_form_and_body():
 
 def test_tool_groups_gate_sites_are_exact():
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
-    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 3, (
-        "exactly three gated sites: selection floor + per-group stamp + RAG force-include"
+    # TEMP (tick-wins E2E diagnostic): 4th gate site = the .tg_debug.json dump
+    # in chat_stream; revert to 3 when the diagnostic is removed.
+    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 4, (
+        "gated sites: selection floor + per-group stamp + RAG force-include + diagnostic dump"
     )
 
 
