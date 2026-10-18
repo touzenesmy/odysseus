@@ -909,3 +909,16 @@ def test_tool_groups_rag_force_include_generalizes_allow_bash():
 def test_frontend_sends_tool_groups_stamp():
     source = _CHAT_JS.read_text(encoding="utf-8")
     assert "fd.append('tool_groups', _tg.join(','))" in source
+
+
+def test_tool_groups_unticked_groups_are_ceiling():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'if "tool_groups" in form_data or "tool_groups" in (body or {}):' in source
+    assert "disabled_tools.update(_tools)" in source
+
+
+def test_tool_groups_force_include_survives_forced_tools_clobbers():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert source.index("_forced_tools = set(_turn_contract.offered)") < source.rindex("BUTTON_TOOLS[_g]"), (
+        "tick force-include must be placed after the wholesale _forced_tools clobbers"
+    )

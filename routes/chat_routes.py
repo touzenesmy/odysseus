@@ -3575,6 +3575,15 @@ def setup_chat_routes(
                 _tool_groups_on.add("bash")
             for _g in _tool_groups_on:
                 disabled_tools.difference_update(BUTTON_TOOLS.get(_g, ()))
+            # Tick wins, both directions (user rule 2026-10-18): a client
+            # that sends the tool_groups key (the web UI always does) also
+            # gets a ceiling -- unticked groups are disabled outright so
+            # RAG / turn-contract selection cannot resurrect them. Clients
+            # without the key (API / legacy callers) are untouched.
+            if "tool_groups" in form_data or "tool_groups" in (body or {}):
+                for _g, _tools in BUTTON_TOOLS.items():
+                    if _g not in _tool_groups_on:
+                        disabled_tools.update(_tools)
         tool_policy = build_effective_tool_policy(
             disabled_tools=disabled_tools,
             last_user_message=message,
@@ -4653,22 +4662,6 @@ def setup_chat_routes(
                         if _forced_tools is None:
                             _forced_tools = set()
                         _forced_tools.add("bash")
-                    # Fork: same force-include floor for every ticked
-                    # tool-group button, whatever RAG selection drops.
-                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
-                        from src.agent_runtime.authority import BUTTON_TOOLS
-                        _tg = {
-                            str(g).strip().lower()
-                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
-                            if str(g).strip().lower()
-                        }
-                        if allow_bash is not None and str(allow_bash).lower() == "true":
-                            _tg.add("bash")
-                        for _g in _tg:
-                            if _g in BUTTON_TOOLS:
-                                if _forced_tools is None:
-                                    _forced_tools = set()
-                                _forced_tools.update(BUTTON_TOOLS[_g])
                     # A globally enabled web toggle must not erase the typed
                     # state tool selected for an unrelated personal action.
                     # Otherwise words such as "today" make a calendar create
@@ -4699,6 +4692,26 @@ def setup_chat_routes(
                             _forced_tools = set(_explicit_selected_tools)
                     if _turn_contract is not None:
                         _forced_tools = set(_turn_contract.offered)
+                    # Fork: same force-include floor for every ticked
+                    # tool-group button, whatever RAG selection drops.
+                    # Placed AFTER the wholesale _forced_tools replacements
+                    # above (explicit-selection / turn-contract clobbers):
+                    # a tick is the user's word and must survive them,
+                    # exactly like the Documents force-include below.
+                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        _tg = {
+                            str(g).strip().lower()
+                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                            if str(g).strip().lower()
+                        }
+                        if allow_bash is not None and str(allow_bash).lower() == "true":
+                            _tg.add("bash")
+                        for _g in _tg:
+                            if _g in BUTTON_TOOLS:
+                                if _forced_tools is None:
+                                    _forced_tools = set()
+                                _forced_tools.update(BUTTON_TOOLS[_g])
                     # Ticked "Documents" toggle: doc tools are always
                     # available this turn, not only when the message
                     # happens to retrieve them (edit_document = "patch the
