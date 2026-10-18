@@ -179,3 +179,5 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `7d028f48` feat(ui): tool-group buttons — data-driven row, tool_groups stamp (slice 3/4)
 - `6318fba0` docs(specs): commit-map + ROADMAP — slice 3/4 (7d028f48)
 - `83185b20` test(fork): tool-group buttons — gate-ON grant tests + route/UI source pins (slice 4/4)
+- `be4573cd` docs(specs): commit-map + ROADMAP — tool-group buttons slice 4/4 (83185b20); feature complete
+- `6d255cf2` docs(specs): ROADMAP — pre-push double-check PASSED (all 4 slices verified, 708/708 targeted)
