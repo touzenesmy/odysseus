@@ -4740,6 +4740,9 @@ def setup_chat_routes(
                                 "forced": sorted(_forced_tools) if _forced_tools else None,
                                 "web_ui_state": client_runtime_context.get("web_ui_state"),
                             }
+                        except Exception as _tg_err:
+                            _tg_dbg = {"error": repr(_tg_err)}
+                        try:
                             with open("/home/samy/.tg_debug.json", "w") as _tg_f:
                                 _tg_f.write(_tg_json.dumps(_tg_dbg, indent=2, default=str))
                         except Exception:
