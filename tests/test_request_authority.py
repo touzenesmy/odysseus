@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.agent_runtime.authority import (
+    BUTTON_TOOLS,
     MISSING_AUTHORITY, ExactOperation, OperationGrant, RequestAuthority,
     active_request_authority, bind_request_authority, create_request_authority,
     restore_background_authority, restore_task_authority, save_background_authority,
@@ -28,6 +29,7 @@ def _scrub_fork_env_vars(monkeypatch):
     set their own values via monkeypatch."""
     monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
     monkeypatch.delenv("ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH", raising=False)
+    monkeypatch.delenv("ODYSSEUS_TOOL_GROUPS", raising=False)
 
 
 def authority(*tools, owner="alice", session_id="s", workspace=""):
@@ -705,3 +707,75 @@ def test_bash_toggle_absent_keeps_file_tool_floor(monkeypatch):
     grant = create_request_authority("Testing")
     assert not grant.permits(ExactOperation.normalize("read_file", "cat f"))
     assert not grant.permits(ExactOperation.normalize("write_file", "echo hi > f"))
+
+# --- Fork: tool-group buttons (Backlog #1) — gate ODYSSEUS_TOOL_GROUPS ---
+
+
+def test_tool_groups_gate_off_web_ui_state_is_inert(monkeypatch):
+    """Gate OFF: a stamped web_ui_state must not grant any group's tools —
+    the stamp alone is inert without the env gate (no capability leak)."""
+    monkeypatch.delenv("ODYSSEUS_TOOL_GROUPS", raising=False)
+    grant = create_request_authority(
+        "Testing, did it work?",
+        client_runtime_context={"web_ui_state": {"sessions": True, "web": True,
+                                                 "media": True, "browser": True,
+                                                 "bash": False}})
+    assert {g.tool for g in grant.grants} == {"ask_user", "update_plan"}
+
+
+@pytest.mark.parametrize("group,expected", [
+    ("sessions", {"list_sessions", "search_chats", "create_session",
+                  "manage_session", "send_to_session"}),
+    ("web", {"web_search", "web_fetch"}),
+    ("media", {"inspect_media", "transcribe_media", "extract_text"}),
+    ("browser", {"private_browser"}),
+])
+def test_tool_groups_gate_on_grants_ticked_group(monkeypatch, group, expected):
+    """Gate ON: a ticked group grants its full BUTTON_TOOLS entry, whatever
+    the request text says (intent classification can never revoke a ticked
+    toggle); unticked groups stay ungranted."""
+    monkeypatch.setenv("ODYSSEUS_TOOL_GROUPS", "1")
+    grant = create_request_authority(
+        "Testing, did it work?",
+        client_runtime_context={"web_ui_state": {group: True}})
+    tools = {g.tool for g in grant.grants}
+    assert expected <= tools
+    for other, other_tools in BUTTON_TOOLS.items():
+        if other != group:
+            assert not (set(other_tools) & tools)
+
+
+def test_tool_groups_gate_on_grants_multiple_ticked_groups(monkeypatch):
+    monkeypatch.setenv("ODYSSEUS_TOOL_GROUPS", "1")
+    grant = create_request_authority(
+        "Testing, did it work?",
+        client_runtime_context={"web_ui_state": {"web": True, "media": True}})
+    tools = {g.tool for g in grant.grants}
+    assert {"web_search", "web_fetch", "inspect_media", "transcribe_media",
+            "extract_text"} <= tools
+
+
+def test_tool_groups_gate_on_nothing_ticked_matches_baseline(monkeypatch):
+    """Gate ON with every group OFF: identical to the upstream baseline."""
+    monkeypatch.setenv("ODYSSEUS_TOOL_GROUPS", "1")
+    grant = create_request_authority(
+        "Testing, did it work?",
+        client_runtime_context={"web_ui_state": {"sessions": False, "web": False,
+                                                 "media": False, "browser": False,
+                                                 "bash": False}})
+    assert {g.tool for g in grant.grants} == {"ask_user", "update_plan"}
+
+
+def test_tool_groups_bash_group_matches_gate_off_bash_grant(monkeypatch):
+    """The bash group under the gate must grant exactly what the pre-feature
+    hardcoded bash-button grant granted (byte-identical bash semantics)."""
+    ctx = {"web_ui_state": {"bash": True}}
+    monkeypatch.setenv("ODYSSEUS_TOOL_GROUPS", "1")
+    on = {g.tool for g in create_request_authority("Testing, did it work?",
+                                                   client_runtime_context=ctx).grants}
+    monkeypatch.delenv("ODYSSEUS_TOOL_GROUPS")
+    off = {g.tool for g in create_request_authority("Testing, did it work?",
+                                                    client_runtime_context=ctx).grants}
+    assert on == off
+    assert {"bash", "read_file", "write_file", "edit_file", "apply_patch",
+            "glob", "grep"} <= on

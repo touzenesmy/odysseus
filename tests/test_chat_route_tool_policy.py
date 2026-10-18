@@ -869,3 +869,43 @@ def test_frontend_sends_explicit_allow_web_search_false_in_agent_mode():
     assert "fd.append('allow_web_search', el('web-toggle').checked ? 'true' : 'false')" in source, (
         "Frontend must send explicit allow_web_search=false in agent mode when toggle is off"
     )
+
+# --- Fork: tool-group buttons (Backlog #1) — gate ODYSSEUS_TOOL_GROUPS ---
+# The floor / stamp / RAG force-include blocks are inline in the chat route
+# (no helper), so pin them the way the rest of this file does: exact source
+# strings. If these lines move, the tests move with them (same convention as
+# the allow_bash / allow_documents assertions above).
+
+
+def test_tool_groups_wire_key_is_read_from_form_and_body():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert source.count('form_data.get("tool_groups") or (body or {}).get("tool_groups")') == 2
+
+
+def test_tool_groups_gate_sites_are_exact():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 3, (
+        "exactly three gated sites: selection floor + per-group stamp + RAG force-include"
+    )
+
+
+def test_tool_groups_floor_discards_ticked_groups_from_disabled_tools():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'disabled_tools.difference_update(BUTTON_TOOLS.get(_g, ()))' in source
+
+
+def test_tool_groups_stamp_carries_per_group_effective_state():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'client_runtime_context["web_ui_state"].update({' in source
+    assert '"sessions": "list_sessions" not in disabled_tools' in source
+    assert '"browser": "private_browser" not in disabled_tools' in source
+
+
+def test_tool_groups_rag_force_include_generalizes_allow_bash():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert "_forced_tools.update(BUTTON_TOOLS[_g])" in source
+
+
+def test_frontend_sends_tool_groups_stamp():
+    source = _CHAT_JS.read_text(encoding="utf-8")
+    assert "fd.append('tool_groups', _tg.join(','))" in source
