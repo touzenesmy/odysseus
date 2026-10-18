@@ -266,7 +266,8 @@ the function enclosing :3336-3410 (name + signature) so tests can call it direct
   verified enforcing (bubblewrap receipts). Sandbox boundaries probed and
   documented (see Status). Roadmap itself updated to RESOLVED. Next: full test
   suite (backlog 2), then PRs (3).
-- **2026-10-15 (04:26):** Rolled back to `improvements-20261012` (bash
+**2026-10-17 (tool-groups 3/4, session 2):** UI slice `7d028f48` — sessions/media/browser buttons in index.html, TOOL_GROUPS data-driven row + per-mode persistence in app.js, tool_groups stamp in chat.js, cache-busters bumped. Committed map gap fixed: f0ba4128/ae57e6be/48e9e805 were missing from commit-map (slice 2 docs commit didn't append). HEAD `7d028f48`, ahead 8 after this commit, unpushed (user terminal). NEXT: slice 4/4 — gate-ON tests (grant + floor cases, mirror test_chat_route_tool_policy.py) + full venv suite, then service restart + UI verify. Gate-OFF verified: 70/70 authority, 141/141 route+authority.
+- - **2026-10-15 (04:26):** Rolled back to `improvements-20261012` (bash
   containment unavailable). Root cause: `bwrap` missing (containment.py
   enforcing mode, bubblewrap is the only filesystem+process_tree mechanism).
   This document created as the standing work tracker.

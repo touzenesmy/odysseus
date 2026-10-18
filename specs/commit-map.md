@@ -173,3 +173,7 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `c11e7d12` docs(specs): ROADMAP — tool-group buttons design pass (verified seam map + impl plan)
 - `ca25a35c` docs(specs): commit-map + ROADMAP status — design commit c11e7d12
 - `175073ca` feat(authority): tool-group buttons — ODYSSEUS_TOOL_GROUPS-gated per-group grant (BUTTON_TOOLS map)
+- `f0ba4128` docs(specs): commit-map + ROADMAP status — slice 1/4 (175073ca)
+- `ae57e6be` feat(routes): tool-group buttons — per-group stamp + selection floor (slice 2/4)
+- `48e9e805` docs(specs): commit-map + ROADMAP — tool-group buttons slice 2/4 (ae57e6be)
+- `7d028f48` feat(ui): tool-group buttons — data-driven row, tool_groups stamp (slice 3/4)
