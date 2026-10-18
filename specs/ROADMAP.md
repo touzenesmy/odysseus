@@ -15,9 +15,9 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-17, ~18:40 EDT)
-- **Branch `Improvements` = `improvements-20261014` @ `175073ca` (local) — ahead 4 of remote `a15d8ab9` (UNPUSHED: c11e7d12, ca25a35c, 175073ca, +this docs commit)**
-  — rebased + all fork fixes, tree clean. Tool-group buttons (Backlog #1) IMPL slice 1/4 landed: `175073ca`. Since
+## Status (2026-10-17, ~22:50 EDT)
+- **Branch `Improvements` = `improvements-20261014` @ `83185b20` (local) — ahead 10 of remote `a15d8ab9` (UNPUSHED: c11e7d12, ca25a35c, 175073ca, f0ba4128, ae57e6be, 48e9e805, 7d028f48, 6318fba0, 83185b20, +this docs commit)**
+  — rebased + all fork fixes, tree clean. Tool-group buttons (Backlog #1) **IMPL COMPLETE (all 4 slices)**: BUTTON_TOOLS grant (175073ca), route stamp+floor (ae57e6be), UI row (7d028f48), tests (83185b20). Gate `ODYSSEUS_TOOL_GROUPS=1`, OFF = byte-identical upstream; 155/155 on both affected suites. NEXT: push (user terminal), then manual UI check + flip flag in `.env` + restart. Since
   `9164b030`: `821c55fd` (stall diagnosis), `383c6ca7` (bash button now ALSO
   gates workspace file tools read/write/edit/patch/glob/grep — file tools no
   longer denied by text-guessing while bash is ON; + `ODYSSEUS_SHOW_THINKING=1`
@@ -98,7 +98,7 @@ must print a real path. Then check voice + strict mode once each.
 `git checkout --detach improvements-20261012 && sudo systemctl restart odysseus`
 
 ## Backlog
-- [ ] **1. Tool-group buttons — replace RAG *guessing* for core tool families (TOP PRIORITY, user directive 2026-10-17).**
+- [ ] **1. Tool-group buttons — replace RAG *guessing* for core tool families (TOP PRIORITY, user directive 2026-10-17).** ✅ IMPL COMPLETE 2026-10-17 (all 4 slices; 155/155 tests) — remaining: push + manual UI check + `ODYSSEUS_TOOL_GROUPS=1` in `.env` + restart. Spec below:
   Generalize the existing bash button into a data-driven **tool-group button row** so
   tool grants are *explicit user intent* (a click), not per-message RAG retrieval +
   text-classification. Solves the three recurring pains: (a) file tools "denied even
@@ -297,3 +297,5 @@ Rules: no refresh/lock/tab-switch mid-turn; fresh session per work block; if a t
 ### 2026-10-17 ~18:40 EDT — Tool-group buttons impl slice 1/4: `BUTTON_TOOLS` map (5 groups) + `ODYSSEUS_TOOL_GROUPS`-gated per-group grant in `create_request_authority` (`175073ca`). Gate-OFF byte-identical — 70/70 tests/test_request_authority.py pass (venv/bin/python). Next: slice 2 = chat_routes per-group stamp + selection floor.
 
 - 2026-10-17 ~19:40 EDT: tool-group buttons **slice 2/4 (route stamp+floor)** — ae57e6be. chat_routes.py: `tool_groups` wire key → per-group disabled_tools floor before policy build; web_ui_state per-group keys; RAG _forced_tools force-include. All three blocks gate-OFF no-ops (42 insertions, 0 deletions); 141/141 on both affected suites. Next: slice 3/4 UI (app.js group row + persistence + cache-buster), then slice 4/4 tests (gate-ON cases).
+- 2026-10-17 ~20:40 EDT: tool-group buttons **slice 3/4 (UI)** — 7d028f48. app.js data-driven 5-group row (MODE_TOOLS pattern, per-mode persistence, default all OFF); chat.js:2646 `tool_groups` stamp (all 5 groups, appends only when non-empty); index.html 3 new buttons; cache-buster `?v=20261017toolgroups` on all 4 html refs. node --check clean on both JS files. Docs 6318fba0.
+- 2026-10-17 ~22:45 EDT: tool-group buttons **slice 4/4 (tests)** — 83185b20. 14 new tests: 8 authority gate-ON grants (per-group, multi-group, nothing-ticked baseline, gate-OFF inertness, bash parity vs gate-OFF) + 6 route/UI source pins (wire key, 3 gate sites, floor, stamp, RAG force-include, frontend stamp). 155/155 on both affected suites (venv/bin/python). **FEATURE COMPLETE — all 4 slices.** Next: push (user terminal), manual UI check, flip ODYSSEUS_TOOL_GROUPS=1.
