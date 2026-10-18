@@ -186,3 +186,4 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `d4925ca4` fix(tools): tick-wins — ceiling for unticked groups + force-include after clobbers (Backlog #1, slice 2.5)
 - `219f0932` docs(specs): commit-map (+33de6e61, +d4925ca4) + ROADMAP — tick-wins fix, E2E root cause
 - `2236c70e` chore(tools): temporary tick-wins E2E diagnostic — .tg_debug.json dump in chat_stream (gate-ON; gate pin 3→4, revert with it)
+- `95422d48` — `fix(tools): diagnostic writes error into .tg_debug.json (Backlog #1)`
