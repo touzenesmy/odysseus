@@ -2045,6 +2045,35 @@ function initializeEventListeners() {
   }
   setupToggle('web-toggle-btn', 'web-toggle', 'web');
   setupToggle('bash-toggle-btn', 'bash-toggle', 'bash');
+  // Tool-group buttons (fork, Backlog #1): data-driven row mirroring the
+  // server's BUTTON_TOOLS map (src/agent_runtime/authority.py). Default OFF;
+  // per-mode persistence like MODE_TOOLS; state rides hidden checkboxes so
+  // chat.js can stamp tool_groups. bash + web groups reuse existing buttons.
+  const TOOL_GROUPS = [
+    { btnId: 'sessions-toggle-btn', checkboxId: 'sessions-toggle', stateKey: 'sessions', label: 'Sessions' },
+    { btnId: 'media-toggle-btn',    checkboxId: 'media-toggle',    stateKey: 'media',    label: 'Media' },
+    { btnId: 'browser-toggle-btn',  checkboxId: 'browser-toggle',  stateKey: 'browser',  label: 'Browser' },
+  ];
+  (function setupToolGroups() {
+    TOOL_GROUPS.forEach(({ btnId, checkboxId, stateKey, label }) => {
+      const btn = el(btnId); const chk = el(checkboxId);
+      if (!btn || !chk) return;
+      const load = (m) => { const s = loadToggleState(); return s[_modeKey(stateKey, m)] || false; };
+      const m0 = (loadToggleState().mode) || 'agent';
+      chk.checked = load(m0);
+      btn.classList.toggle('active', chk.checked);
+      btn.setAttribute('aria-pressed', String(chk.checked));
+      btn.addEventListener('click', () => {
+        const m = (loadToggleState().mode) || 'agent';
+        chk.checked = !chk.checked;
+        btn.classList.toggle('active', chk.checked);
+        btn.setAttribute('aria-pressed', String(chk.checked));
+        const st = loadToggleState(); st[_modeKey(stateKey, m)] = chk.checked; saveToggleState(st);
+        if (uiModule?.showToast) uiModule.showToast(`${label} ${chk.checked ? 'on' : 'off'}`, 1800);
+      });
+    });
+  })();
+
   setupToggle('docs-toggle-btn', 'docs-toggle', 'docs');
   try { workspaceModule.initWorkspace(); } catch (_) {}
 
@@ -2344,7 +2373,7 @@ function initializeEventListeners() {
     if (!inputLeft || !overflowMenu || !overflowWrapper) return;
 
     // Buttons that can be collapsed (in reverse priority — last collapsed first)
-    const collapsibleIds = ['docs-toggle-btn', 'bash-toggle-btn', 'web-toggle-btn'];
+    const collapsibleIds = ['docs-toggle-btn', 'bash-toggle-btn', 'web-toggle-btn', 'sessions-toggle-btn', 'media-toggle-btn', 'browser-toggle-btn'];
     const collapsibleBtns = collapsibleIds.map(id => el(id)).filter(Boolean);
     // Map of toolbar btn id → overflow mirror element (created dynamically)
     const overflowMirrors = new Map();

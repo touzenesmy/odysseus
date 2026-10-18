@@ -2636,6 +2636,15 @@ import { invalidateSettings } from './appConfig.js';
 	      }
       fd.append('allow_bash', el('bash-toggle').checked ? 'true' : 'false');
       if (workspaceAgentIntent) fd.set('allow_bash', 'true');
+      // Tool groups (fork, Backlog #1): stamp every checked group; server
+      // (ODYSSEUS_TOOL_GROUPS gate) reads tool_groups for grants + the
+      // selection floor. bash/web reuse their existing checkbox state.
+      {
+        const _tg = [['bash','bash-toggle'],['web','web-toggle'],['sessions','sessions-toggle'],['media','media-toggle'],['browser','browser-toggle']]
+          .filter(([,id]) => { const c = el(id); return c && c.checked; })
+          .map(([g]) => g);
+        if (_tg.length) fd.append('tool_groups', _tg.join(','));
+      }
       fd.append('allow_documents', el('docs-toggle').checked ? 'true' : 'false');
       const ragChk = el('rag-toggle');
       if (ragChk && !ragChk.checked) {
