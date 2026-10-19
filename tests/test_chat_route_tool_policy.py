@@ -907,16 +907,18 @@ def test_stream_with_save_never_rebinds_disabled_tools():
         if isinstance(node, ast.AsyncFunctionDef) and node.name == "stream_with_save":
             for sub in ast.walk(node):
                 if getattr(sub, "ctx", None) is ast.Store and (
-                    (isinstance(sub, ast.Name) and sub.id == "disabled_tools")
-                    or (isinstance(sub, ast.Attribute) and sub.attr == "disabled_tools")
+                    (isinstance(sub, ast.Name) and sub.id in ("disabled_tools", "tool_policy"))
+                    or (isinstance(sub, ast.Attribute) and sub.attr in ("disabled_tools", "tool_policy"))
                 ):
                     bad.append(sub.lineno)
-    assert not bad, f"disabled_tools assigned inside stream_with_save at lines {bad}"
+    assert not bad, f"disabled_tools/tool_policy assigned inside stream_with_save at lines {bad}"
 
 
 def test_tool_groups_floor_at_final_consumption():
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
     assert "tg_final_disabled = (disabled_tools or set()) - _tg_final_floor" in source
+    assert "tg_final_policy = build_effective_tool_policy(" in source
+    assert "tool_policy=tg_final_policy," in source
     assert "disabled_tools=tg_final_disabled if tg_final_disabled else None" in source
 
 

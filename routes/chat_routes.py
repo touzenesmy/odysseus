@@ -4769,8 +4769,23 @@ def setup_chat_routes(
                         }:
                             _tg_final_floor.update(BUTTON_TOOLS.get(_g, ()))
                         tg_final_disabled = (disabled_tools or set()) - _tg_final_floor
+                        # The turn-contract path above REBUILT tool_policy
+                        # from the re-derived, un-floored set (~3875), so the
+                        # policy the bridge receives still disables ticked
+                        # tools -- and the agent honors the policy, not the
+                        # disabled_tools kwarg (2026-10-19 00:44 dump:
+                        # variable floored, surface unchanged). Rebuild the
+                        # policy from the floored set. NEW LOCAL again:
+                        # never rebind tool_policy inside stream_with_save
+                        # (same closure class as the 2026-10-18 incident).
+                        tg_final_policy = build_effective_tool_policy(
+                            disabled_tools=tg_final_disabled,
+                            last_user_message=message,
+                            disable_mcp=strict_chat,
+                        )
                     else:
                         tg_final_disabled = disabled_tools
+                        tg_final_policy = tool_policy
                     async for chunk in _sse_keepalive(_stream_agent_with_execution_bridge(
                         _external_execution_bridge(client_runtime_context),
                         sess.endpoint_url,
@@ -4788,7 +4803,7 @@ def setup_chat_routes(
                         session_id=session,
                         history_session=sess,
                         disabled_tools=tg_final_disabled if tg_final_disabled else None,
-                        tool_policy=tool_policy,
+                        tool_policy=tg_final_policy,
                         owner=_user,
                         fallbacks=_foreground_candidates[1:],
                         route_descriptors=_foreground_route_descriptors,
