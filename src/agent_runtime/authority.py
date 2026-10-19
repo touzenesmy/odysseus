@@ -447,8 +447,15 @@ def create_request_authority(request_text, *, owner=None, session_id=None, works
         tools.update(t for t in (
             "read_file", "write_file", "edit_file", "apply_patch", "glob", "grep",
         ))
+    # Fork opt-in (ODYSSEUS_CORE_TOOL_GRANTS=1): manage_memory is a core
+    # channel, not an intent-gated one — memory access is granted on every
+    # request like ask_user, not only when the classifier tags a memory
+    # family. Upstream (flag OFF) keeps the exact ask_user/update_plan floor.
+    _core_floor = {"ask_user", "update_plan"}
+    if os.environ.get("ODYSSEUS_CORE_TOOL_GRANTS", "").strip().lower() in {"1", "true", "yes"}:
+        _core_floor.add("manage_memory")
     grants = []
-    for name in sorted(tools | {"ask_user", "update_plan"}):
+    for name in sorted(tools | _core_floor):
         name = canonical_tool(name)
         actions = inputs = None
         if name == "private_browser":
