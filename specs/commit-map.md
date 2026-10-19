@@ -197,3 +197,10 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `2e3ba498` — fix(tool-groups): tick-wins floor at final consumption, closure-safe (re-land)
 
 - `abd2713a` fix(tool-groups): rebuild tool_policy floored — agent honors policy, not kwarg — turn-contract path rebuilt tool_policy from the un-floored set. NEW LOCAL tg_final_policy; AST guard extended to tool_policy. 159/159.
+
+- `a360fd71` docs(specs): commit-map + ROADMAP — tool_policy floored rebuild (abd2713a)
+- `934b8366` fix(tool-groups): tick-wins at the contract boundary — offer button-on groups via contract.offered (frozen TurnContract written via object.__setattr__)
+- `60a120a0` docs(specs): commit-map + ROADMAP — contract-boundary tick-wins (934b8366)
+- `ca3fda9e` Revert of 60a120a0 (rollback cycle 2026-10-19; superseded by 8184bebf re-land)
+- `8184bebf` fix(tool-groups): write frozen turn contract via object.__setattr__ (934b8366 follow-up)
+- `1fe20ffc` chore(tool-groups): remove tick-wins E2E diagnostic + contract-boundary guard tests (Backlog #1 closeout)

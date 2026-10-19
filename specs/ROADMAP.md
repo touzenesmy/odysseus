@@ -15,12 +15,12 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-18, ~23:45 EDT)
-- **HEAD:** `Improvements` @ `2e3ba498` (feature) + this docs commit; ahead 2 of touzenesmy/Improvements, UNPUSHED. Tree clean. Service on PID 2495653 (22:56 restart, reverted content).
-- **Tool-groups (Backlog #1) — floor re-landed, closure-safe (`2e3ba498`).** The tick-wins floor now runs at final consumption: new local `tg_final_disabled` at the agent-bridge call, so the 3603 `all_disabled_names()` re-derivation + turn-contract path can't clobber it. Gate OFF = closure value, byte-identical. The crashing version (`ce6aeb2f`, reverted `2908e02c`/`d259efc3`) rebound the `disabled_tools` closure inside `stream_with_save` -> UnboundLocalError on every run.
-- **Guards (new):** AST test — no Store-context write to `disabled_tools` inside `stream_with_save` (pins the incident class; would have caught ce6aeb2f) + source pins for the floor. 159/159 route+authority green.
-- **E2E dump verdict (22:21, decisive):** stamp carried all 5 groups (`tool_groups_dbg` all 11); force-include correct; ONLY gap = ticked tools re-disabled at final set. That gap is what `2e3ba498` closes.
-- **NEXT:** user: `git push touzenesmy improvements-20261014 Improvements` + `./update.sh` (verify PID) + hard-refresh (buster 20261018tgfix) + all 5 ON + "list my sessions". Expectation: all group tools in surface. THEN cleanup pass: remove diagnostic dump (gate pin 5->4, wire pin 3->2) + call Backlog #1 done.
+## Status (2026-10-19, ~14:20 EDT)
+- **HEAD:** `Improvements` = `improvements-20261014` @ this docs commit; both pushed to touzenesmy (3-way sync). Tree clean.
+- **Tool-groups (Backlog #1) — DONE, verified in production.** Full tick-wins chain landed and confirmed live: per-group stamp + selection floor + RAG force-include (after clobbers) + final-consumption floor (closure-safe `tg_final_disabled`) + floored policy rebuild + **contract-boundary offer** (`934b8366`/`8184bebf`: the frozen `TurnContract` receives ticked tools via `object.__setattr__` on `offered`/`executable`/`schema_json` immediately after `resolve_turn_contract`). Live verification 2026-10-19: all 5 groups ON -> all 5 groups present in the agent surface (bash/web/sessions/media/browser).
+- **Diagnostic removed** (`1fe20ffc`): the `.tg_debug.json` dump + `tool_groups_dbg` wire field are gone; gate sites 6->5, wire reads stay 4; buster `20261019tg1`.
+- **Guards (complete set):** AST closure guard (no Store-context write to `disabled_tools`/`tool_policy` inside `stream_with_save` — pins the 2026-10-18 incident class) + source pins + **contract-boundary execution test** (`tests/test_tool_groups_contract_guard.py`: runs the exact `object.__setattr__` tick-wins mutation on the real frozen `TurnContract`, incl. `permits()` + idempotency, and pins the route order resolve -> offer -> clobbers -> floor -> bridge).
+- **NEXT:** none blocking. Open: Backlog #2 voice/strict smoke, #4 upstream PRs, #5 flake watch, #7 branch prune.
 
 ## RESOLVED 2026-10-15 ~19:10 EDT — bash containment blocked the 2014 branch
 - **Resolution:** `bwrap` installed (0.12.0), probe passed, `./update.sh` switch
@@ -60,7 +60,7 @@ must print a real path. Then check voice + strict mode once each.
 `git checkout --detach improvements-20261012 && sudo systemctl restart odysseus`
 
 ## Backlog
-- [ ] **1. Tool-group buttons — replace RAG *guessing* for core tool families (TOP PRIORITY, user directive 2026-10-17).** ✅ IMPL COMPLETE 2026-10-17 (all 4 slices; 155/155 tests) — remaining: push + manual UI check + `ODYSSEUS_TOOL_GROUPS=1` in `.env` + restart. Spec below:
+- [x] **1. Tool-group buttons — replace RAG *guessing* for core tool families (TOP PRIORITY, user directive 2026-10-17).** ✅ DONE 2026-10-19: all 4 slices + tick-wins chain (contract-boundary offer, closure-safe floor, floored policy). Verified in production: all 5 groups ON -> all 5 groups granted in the live agent surface. `ODYSSEUS_TOOL_GROUPS=1` in `.env`. Spec below:
   Generalize the existing bash button into a data-driven **tool-group button row** so
   tool grants are *explicit user intent* (a click), not per-message RAG retrieval +
   text-classification. Solves the three recurring pains: (a) file tools "denied even
@@ -241,6 +241,7 @@ the function enclosing :3336-3410 (name + signature) so tests can call it direct
   opt-out, `update.sh` discard guard, dated-branch convention, commit map.
   Details: `specs/instance-map.md` + fork skill session ledger.
 
+- 2026-10-19 ~14:20 EDT: **Backlog #1 closeout** — diagnostic dump removed from route+chat.js (gate 6->5, buster 20261019tg1) + `tests/test_tool_groups_contract_guard.py` (executes the frozen-contract tick-wins mutation on the real class; pins route wiring order). Feature verified live with all 5 groups. commit-map backfilled (a360fd71..1fe20ffc); dated branch ff'd to alias; pushed.
 - 2026-10-16 ~07:30 EDT: live answer streaming opt-out landed (`f738b263`).
   User opted B: restore pre-wave-3 streaming (the completion gate held ALL
   answer prose until the generator unwinds → one big end-of-turn bubble;
