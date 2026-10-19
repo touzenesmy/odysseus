@@ -120,12 +120,32 @@ def test_unknown_intent_gets_contract_core_recovery_surface_with_fork_flag(monke
 
 
 def test_fork_flag_does_not_widen_recognized_families(monkeypatch):
-    """The opt-in only fills the unknown-intent floor; explicit intent is unchanged."""
+    """The opt-in only adds the memory floor on top of explicit intent; the
+    core recovery surface (unknown-intent only) must not leak into recognized
+    families."""
     monkeypatch.setenv("ODYSSEUS_CORE_TOOL_GRANTS", "1")
     before = create_request_authority("Find my recent invoices in the workspace files")
     monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS")
     reference = create_request_authority("Find my recent invoices in the workspace files")
-    assert {g.tool for g in before.grants} == {g.tool for g in reference.grants}
+    assert {g.tool for g in before.grants} == {g.tool for g in reference.grants} | {"manage_memory"}
+
+
+def test_manage_memory_always_granted_with_fork_flag(monkeypatch):
+    """Fork opt-in: memory is a core channel — granted on every request
+    (recognized or not), like ask_user, not only on memory-family intent."""
+    monkeypatch.setenv("ODYSSEUS_CORE_TOOL_GRANTS", "1")
+    for text in ("List my tasks", "Testing, did it work?", "Search the web for current weather"):
+        grant = create_request_authority(text)
+        assert grant.permits(ExactOperation.normalize("manage_memory", '{"action":"list"}')), text
+
+
+def test_manage_memory_not_in_floor_with_fork_flag_off(monkeypatch):
+    """Upstream (flag OFF): the floor stays exactly ask_user/update_plan;
+    memory stays intent-gated via the memory family only."""
+    monkeypatch.delenv("ODYSSEUS_CORE_TOOL_GRANTS", raising=False)
+    grant = create_request_authority("Testing, did it work?")
+    assert {g.tool for g in grant.grants} == {"ask_user", "update_plan"}
+    assert not grant.permits(ExactOperation.normalize("manage_memory", '{"action":"list"}'))
 
 
 
