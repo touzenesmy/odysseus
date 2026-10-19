@@ -879,18 +879,16 @@ def test_frontend_sends_explicit_allow_web_search_false_in_agent_mode():
 
 def test_tool_groups_wire_key_is_read_from_form_and_body():
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
-    # 3 reads: selection floor (chat_stream) + final-consumption floor
-    # (stream_with_save) + the diagnostic dump.
+    # 4 reads: selection floor (chat_stream) + contract-boundary offer +
+    # RAG force-include + final-consumption floor (stream_with_save).
     assert source.count('form_data.get("tool_groups") or (body or {}).get("tool_groups")') == 4
 
 
 def test_tool_groups_gate_sites_are_exact():
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
-    # TEMP (tick-wins E2E diagnostic): 5th gate site = the .tg_debug.json dump
-    # in chat_stream; revert to 4 when the diagnostic is removed.
-    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 6, (
+    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 5, (
         "gated sites: selection floor + per-group stamp + RAG force-include + "
-        "final-consumption floor + diagnostic dump"
+        "final-consumption floor + contract-boundary offer"
     )
 
 

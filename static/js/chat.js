@@ -2645,7 +2645,7 @@ import { invalidateSettings } from './appConfig.js';
         // button and re-sync. tool_groups_dbg reports cb/btn states at send
         // time for diagnostics (ignored server-side).
         const _tgPairs = [['bash','bash-toggle'],['web','web-toggle'],['sessions','sessions-toggle'],['media','media-toggle'],['browser','browser-toggle']];
-        const _tg = []; const _tgDbg = [];
+        const _tg = [];
         for (const [g, id] of _tgPairs) {
           const c = el(id);
           const b = el(id.replace(/-toggle$/, '-toggle-btn'));
@@ -2653,10 +2653,8 @@ import { invalidateSettings } from './appConfig.js';
           const btn = !!(b && b.classList.contains('active'));
           if (btn && c && !c.checked) c.checked = true;
           if (cb || btn) _tg.push(g);
-          _tgDbg.push(g + ':' + (cb ? 1 : 0) + (btn ? '1' : '0'));
         }
         if (_tg.length) fd.append('tool_groups', _tg.join(','));
-        fd.append('tool_groups_dbg', _tgDbg.join(','));
       }
       fd.append('allow_documents', el('docs-toggle').checked ? 'true' : 'false');
       const ragChk = el('rag-toggle');

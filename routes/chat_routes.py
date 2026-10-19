@@ -4753,33 +4753,6 @@ def setup_chat_routes(
                             _forced_tools = set()
                         _forced_tools.update(DOCUMENT_TOOL_NAMES)
 
-                    # Fork DIAGNOSTIC (temporary, remove after tick-wins E2E
-                    # confirmation): dump the final tool-selection inputs to a
-                    # file so the sandbox side can inspect them without
-                    # journal access. Gate-ON only; never breaks streaming.
-                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
-                        try:
-                            import json as _tg_json
-                            import time as _tg_time
-                            _tg_raw = (form_data.get("tool_groups") if form_data is not None else None) or (body or {}).get("tool_groups") or ""
-                            _tg_dbg = {
-                                "ts": _tg_time.strftime("%Y-%m-%d %H:%M:%S"),
-                                "raw_tool_groups": str(_tg_raw),
-                                "tool_groups_dbg": (form_data.get("tool_groups_dbg") if form_data is not None else None) or (body or {}).get("tool_groups_dbg") or "",
-                                "allow_bash": str(allow_bash),
-                                "use_turn_contract": bool(_use_turn_contract),
-                                "turn_contract_offered": sorted(_turn_contract.offered) if _turn_contract is not None else None,
-                                "disabled": sorted(disabled_tools or ()),
-                                "forced": sorted(_forced_tools) if _forced_tools else None,
-                                "web_ui_state": client_runtime_context.get("web_ui_state"),
-                            }
-                        except Exception as _tg_err:
-                            _tg_dbg = {"error": repr(_tg_err)}
-                        try:
-                            with open("/home/samy/.tg_debug.json", "w") as _tg_f:
-                                _tg_f.write(_tg_json.dumps(_tg_dbg, indent=2, default=str))
-                        except Exception:
-                            pass
                     # Fork: tick-wins floor at final consumption (Backlog #1,
                     # gate ODYSSEUS_TOOL_GROUPS=1). Ticked groups' tools are
                     # un-disabled HERE, at the point the agent bridge consumes
