@@ -197,4 +197,3 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `2e3ba498` — fix(tool-groups): tick-wins floor at final consumption, closure-safe (re-land)
 
 - `abd2713a` fix(tool-groups): rebuild tool_policy floored — agent honors policy, not kwarg — turn-contract path rebuilt tool_policy from the un-floored set. NEW LOCAL tg_final_policy; AST guard extended to tool_policy. 159/159.
-- `934b8366` — fix(tool-groups): tick-wins at the contract boundary — offer button-on groups via contract.offered
