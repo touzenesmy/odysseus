@@ -4705,13 +4705,13 @@ def setup_chat_routes(
                             _tg_c_added |= set(BUTTON_TOOLS.get(_tg_c_g, ()))
                         _tg_c_added -= set(_turn_contract.offered)
                         if _tg_c_added:
-                            _turn_contract.executable = _turn_contract.executable | _tg_c_added
-                            _turn_contract.offered = _turn_contract.offered | _tg_c_added
-                            _turn_contract.schema_json = _turn_contract.schema_json + tuple(
+                            object.__setattr__(_turn_contract, "executable", _turn_contract.executable | _tg_c_added)
+                            object.__setattr__(_turn_contract, "offered", _turn_contract.offered | _tg_c_added)
+                            object.__setattr__(_turn_contract, "schema_json", _turn_contract.schema_json + tuple(
                                 _tg_json.dumps(s, sort_keys=True)
                                 for s in _contract_schemas
                                 if s.get("function", {}).get("name") in _tg_c_added
-                            )
+                            ))
                     if _turn_contract is None:
                         _explicit_selected_tools = selected_tools_for_request(message)
                         if _explicit_selected_tools:
