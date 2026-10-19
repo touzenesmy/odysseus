@@ -206,3 +206,5 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `1fe20ffc` chore(tool-groups): remove tick-wins E2E diagnostic + contract-boundary guard tests (Backlog #1 closeout)
 - `af8c542c` docs(specs): commit-map + ROADMAP — diagnostic removal + contract guard + Backlog #1 done (1fe20ffc)
 - `65931be8` docs(specs): ROADMAP — record pending memory snapshot update (manage_memory denied by tool authority)
+- `b5a1e70d` docs(specs): commit-map + ROADMAP — final backfill (af8c542c/65931be8) + closeout verification entry
+- `813c982d` feat(authority): manage_memory core floor under ODYSSEUS_CORE_TOOL_GRANTS (memory granted every request, like ask_user; flag OFF = upstream floor)
