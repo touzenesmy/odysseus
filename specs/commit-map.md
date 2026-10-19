@@ -195,3 +195,5 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `d259efc3` — Revert "docs(specs): commit-map + ROADMAP — E2E dump verdict + consumption-point floor (e15099c4)"
 - `2908e02c` — Revert "fix(tool-groups): tick-wins floor at final consumption point (Backlog #1)"
 - `2e3ba498` — fix(tool-groups): tick-wins floor at final consumption, closure-safe (re-land)
+
+- `abd2713a` fix(tool-groups): rebuild tool_policy floored — agent honors policy, not kwarg — turn-contract path rebuilt tool_policy from the un-floored set. NEW LOCAL tg_final_policy; AST guard extended to tool_policy. 159/159.
