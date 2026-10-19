@@ -4748,6 +4748,21 @@ def setup_chat_routes(
                                 _tg_f.write(_tg_json.dumps(_tg_dbg, indent=2, default=str))
                         except Exception:
                             pass
+                    # Tick-wins floor at the final consumption point. The
+                    # line-3577 floor is clobbered by `disabled_tools =
+                    # tool_policy.all_disabled_names()` (line 3603) plus the
+                    # turn-contract path, which re-derive a disabled set that
+                    # still contains the ticked group tools even though they
+                    # are force-included. Subtract ONLY the ticked group
+                    # tools -- never the whole forced set, because upstream
+                    # keeps some force-included tools deliberately disabled
+                    # (the clean browser filter). Gate OFF: block never runs.
+                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        _tg_final_floor = set()
+                        for _g in _tool_groups_on:
+                            _tg_final_floor.update(BUTTON_TOOLS.get(_g, ()))
+                        disabled_tools = (disabled_tools or set()) - _tg_final_floor
                     async for chunk in _sse_keepalive(_stream_agent_with_execution_bridge(
                         _external_execution_bridge(client_runtime_context),
                         sess.endpoint_url,

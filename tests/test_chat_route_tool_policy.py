@@ -886,7 +886,7 @@ def test_tool_groups_gate_sites_are_exact():
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
     # TEMP (tick-wins E2E diagnostic): 4th gate site = the .tg_debug.json dump
     # in chat_stream; revert to 3 when the diagnostic is removed.
-    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 4, (
+    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 5, (
         "gated sites: selection floor + per-group stamp + RAG force-include + diagnostic dump"
     )
 
