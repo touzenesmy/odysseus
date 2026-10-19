@@ -189,3 +189,9 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `95422d48` — `fix(tools): diagnostic writes error into .tg_debug.json (Backlog #1)`
 
 - `d76fe821` — fix(tool-groups): self-healing stamp (button state = truth) + tool_groups_dbg + cache-buster 20261018tgfix
+- `bda6c65c` — docs(specs): commit-map + ROADMAP for self-healing stamp fix (d76fe821)
+- `ce6aeb2f` — fix(tool-groups): tick-wins floor at final consumption point (Backlog #1)
+- `7ff72f50` — docs(specs): commit-map + ROADMAP — E2E dump verdict + consumption-point floor (e15099c4)
+- `d259efc3` — Revert "docs(specs): commit-map + ROADMAP — E2E dump verdict + consumption-point floor (e15099c4)"
+- `2908e02c` — Revert "fix(tool-groups): tick-wins floor at final consumption point (Backlog #1)"
+- `2e3ba498` — fix(tool-groups): tick-wins floor at final consumption, closure-safe (re-land)

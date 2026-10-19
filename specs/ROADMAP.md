@@ -15,50 +15,12 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-18, ~00:30 EDT)
-- **Branch `Improvements` = `improvements-20261014` @ `2236c70e` + this docs commit (local) — UNPUSHED: `2236c70e` (E2E diagnostic) + this docs commit. Push per fork rule (dated name, from user terminal): `git push touzenesmy improvements-20261014 Improvements`**
-  — rebased + all fork fixes, tree clean. Tool-group buttons (Backlog #1) **IMPL COMPLETE (all 4 slices)**: BUTTON_TOOLS grant (175073ca), route stamp+floor (ae57e6be), UI row (7d028f48), tests (83185b20). Gate `ODYSSEUS_TOOL_GROUPS=1`, OFF = byte-identical upstream; 155/155 on both affected suites. **Pre-push double-check (2026-10-17 ~23:00 EDT): PASSED** — all 4 slice diffs re-read verbatim (grant 175073ca / route stamp+floor ae57e6be / UI 7d028f48 / tests 83185b20); 708 passed on the 5 authority+route+tool-policy suites; full suite running in bg (long suite exceeds sandbox foreground cap). Upstream moved ~15 commits since a15d8ab9 (incl. refactor PRs touching chat_routes.py/authority.py/static — expect rebase conflicts at next rebase, drop-check applies). NEXT: push (user terminal), then manual UI check + flip flag in `.env` + restart. Since
-  `9164b030`: `821c55fd` (stall diagnosis), `383c6ca7` (bash button now ALSO
-  gates workspace file tools read/write/edit/patch/glob/grep — file tools no
-  longer denied by text-guessing while bash is ON; + `ODYSSEUS_SHOW_THINKING=1`
-  restores the Qwen 3.8 thinking stream upstream hides), `f4c4681c` (thinking
-  fix PART 2: tool-profile models force `thinking_mode=off` so the ROUTE
-  gates drop thinking too — loop gate alone was insufficient; all 4 route
-  gates now honor the flag). Both are fork opt-outs, default upstream,
-  drop-check at next rebase. `.env` flags: CORE_TOOL_GRANTS=1,
-  SERVER_HOME_LAUNCH=1, COMPLETION_GATE=0, SHOW_THINKING=1 (line 29).
-- **Running service:** restarted 2026-10-16 ~20:00 EDT at `f4c4681c`.
-  **THINKING STREAM CONFIRMED LIVE by user (2026-10-16 22:05 EDT)** —
-  "Oh, I see thinking now!" Batch closed: transcript-wall fix, completion
-  gate bypass, file-tool button gate, thinking stream all working.
-- **Known behaviors (diagnosed, verified in app.log + chat_messages):**
-  1. "Stalls" are mostly SLOW turns (200–285s/round, 27B q3 on 16GB VRAM)
-     with thinking hidden → invisible work. FIXED in code by SHOW_THINKING
-     (pending push+restart).
-  2. `[Cancelled]` errors = rebase-born close-path cancel semantics
-     (`11ed6f13`+`1928f283`): client disconnect (tab switch, phone lock,
-     refresh, stop) cancels the running turn. RULE: no refresh/lock/tab-
-     switch mid-turn; if cancelled, just resend.
-  3. Wall-of-text = context overload (>70% start). RULE: fresh session per
-     work block, ≤10 tool calls per turn, hand off here at ~70%.
-- **`improvements-20261012`** @ `207df1c0` (pre-rebase baseline) — rollback
-  target, untouched.
-- Service `odysseus` (systemd, uvicorn :7000); host PID not visible from the
-  assistant's sandbox (PID namespace) — query it with
-  `systemctl show odysseus -p MainPID`. Model is the separate `boot-model` unit
-  (llama-server :8050).
-- `.env` flags in place (both needed on the 2014 branch):
-  `ODYSSEUS_CORE_TOOL_GRANTS=1` (authority recovery grants) and
-  `ODYSSEUS_ALLOW_SERVER_HOME_LAUNCH=1` (control-state guard opt-out).
-  `ODYSSEUS_LIVE_ANSWER_STREAM=1` (stream answer prose live instead of the
-  completion gate holding it until the turn ends — restores pre-wave-3 UX).
-- **Sandbox contract (verified live 2026-10-15):** assistant commands run under
-  bwrap, mode enforcing. `/workspace` (= user home) rw; repo `venv` (named
-  `venv`, not `.venv`) and `/usr`/`/etc` read-only; network inherited; no
-  sudo/systemctl from inside.
-  Use `cd /workspace/odysseus` inside (not `~` — host home is not mounted as `~`).
-  `git push` inside needs `GIT_SSH_COMMAND="ssh -F /dev/null -o IdentitiesOnly=yes
-  -o IdentityFile=~/.ssh/id_ed25519"` — plain ssh trips over host `/etc/ssh` perms.
+## Status (2026-10-18, ~23:45 EDT)
+- **HEAD:** `Improvements` @ `2e3ba498` (feature) + this docs commit; ahead 2 of touzenesmy/Improvements, UNPUSHED. Tree clean. Service on PID 2495653 (22:56 restart, reverted content).
+- **Tool-groups (Backlog #1) — floor re-landed, closure-safe (`2e3ba498`).** The tick-wins floor now runs at final consumption: new local `tg_final_disabled` at the agent-bridge call, so the 3603 `all_disabled_names()` re-derivation + turn-contract path can't clobber it. Gate OFF = closure value, byte-identical. The crashing version (`ce6aeb2f`, reverted `2908e02c`/`d259efc3`) rebound the `disabled_tools` closure inside `stream_with_save` -> UnboundLocalError on every run.
+- **Guards (new):** AST test — no Store-context write to `disabled_tools` inside `stream_with_save` (pins the incident class; would have caught ce6aeb2f) + source pins for the floor. 159/159 route+authority green.
+- **E2E dump verdict (22:21, decisive):** stamp carried all 5 groups (`tool_groups_dbg` all 11); force-include correct; ONLY gap = ticked tools re-disabled at final set. That gap is what `2e3ba498` closes.
+- **NEXT:** user: `git push touzenesmy improvements-20261014 Improvements` + `./update.sh` (verify PID) + hard-refresh (buster 20261018tgfix) + all 5 ON + "list my sessions". Expectation: all group tools in surface. THEN cleanup pass: remove diagnostic dump (gate pin 5->4, wire pin 3->2) + call Backlog #1 done.
 
 ## RESOLVED 2026-10-15 ~19:10 EDT — bash containment blocked the 2014 branch
 - **Resolution:** `bwrap` installed (0.12.0), probe passed, `./update.sh` switch
@@ -306,3 +268,5 @@ Rules: no refresh/lock/tab-switch mid-turn; fresh session per work block; if a t
 **2026-10-18 (tool-groups slice 2.5 — tick-wins, E2E debug):** User E2E test: with all 5 buttons ON, agent surface still lacked sessions+browser groups every cycle. Root cause found by reading the live chain verbatim: the ticked-group force-include (slice 2) was placed BEFORE the two wholesale `_forced_tools` replacements (`_explicit_selected_tools`, `_turn_contract.offered`) — on contract turns it was silently discarded; only RAG-retrievable groups (bash/media/web) survived. User rule: **tick wins, both directions** (unticked group must never be offered by RAG). Fix `d4925ca4`: (1) CEILING — when the client sends tool_groups, unticked groups go into disabled_tools (stamp derives from disabled_tools → authority grant auto-disabled too); (2) force-include re-homed AFTER the clobbers, alongside upstream allow_documents. 157/157 (route+authority suites), gate sites still exactly 3, new pins: ceiling + clobber-order. NEXT: user pushes d4925ca4 + docs, restart service (`./update.sh`), all buttons ON, send 'list my sessions' → sessions tools must appear.
 
 **2026-10-18 (evening, EDT) — E2E diagnostic in flight (`2236c70e`):** tick-wins fix confirmed deployed (service PID 2400464, started 17:32:04 EDT, post-fix) but sessions/browser STILL absent from agent surface — and the force-include's downstream fate was never measured. Option B executed: gate-ON diagnostic dump in `chat_stream` right before the agent-launch call (the real chokepoint — one level below the force-include): raw `tool_groups` stamp, allow_bash, turn-contract offered, final disabled_tools, forced_tools, web_ui_state → `/home/samy/.tg_debug.json` (readable from sandbox; no journal needed). Gate pin temporarily 4. NEXT: user push + `./update.sh` (verify PID change) → all 5 buttons ON → send 'list my sessions' → agent reads `.tg_debug.json` next turn → verdict: stamp partial (UI) vs forced-set correct but tools stripped downstream (deeper filter) → fix, remove diagnostic, revert pin 4→3.
+
+**2026-10-18 (tool-groups floor re-land):** crash postmortem + fix. ce6aeb2f rebound the `disabled_tools` closure inside nested `stream_with_save` -> UnboundLocalError every agent run (reverted 2908e02c + d259efc3; user restored service health). Re-landed as 2e3ba498: floor at final consumption via NEW local `tg_final_disabled` (closure read-only), 159/159 green, AST guard test pins the incident. Map backfilled 6 pushed commits (bda6c65c..2e3ba498). Ahead 2, unpushed. NEXT: user push+update.sh+hard-refresh+"list my sessions" -> expect 5/5 -> cleanup pass (remove diagnostic, pins 5->4 / 3->2).
