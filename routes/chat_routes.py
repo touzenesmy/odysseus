@@ -4733,6 +4733,7 @@ def setup_chat_routes(
                             _tg_dbg = {
                                 "ts": _tg_time.strftime("%Y-%m-%d %H:%M:%S"),
                                 "raw_tool_groups": str(_tg_raw),
+                                "tool_groups_dbg": (form_data.get("tool_groups_dbg") if form_data is not None else None) or (body or {}).get("tool_groups_dbg") or "",
                                 "allow_bash": str(allow_bash),
                                 "use_turn_contract": bool(_use_turn_contract),
                                 "turn_contract_offered": sorted(_turn_contract.offered) if _turn_contract is not None else None,
