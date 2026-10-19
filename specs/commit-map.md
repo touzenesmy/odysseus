@@ -204,3 +204,5 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `ca3fda9e` Revert of 60a120a0 (rollback cycle 2026-10-19; superseded by 8184bebf re-land)
 - `8184bebf` fix(tool-groups): write frozen turn contract via object.__setattr__ (934b8366 follow-up)
 - `1fe20ffc` chore(tool-groups): remove tick-wins E2E diagnostic + contract-boundary guard tests (Backlog #1 closeout)
+- `af8c542c` docs(specs): commit-map + ROADMAP — diagnostic removal + contract guard + Backlog #1 done (1fe20ffc)
+- `65931be8` docs(specs): ROADMAP — record pending memory snapshot update (manage_memory denied by tool authority)
