@@ -16,7 +16,7 @@
 >   here; link.
 
 ## Status (2026-10-18, ~23:45 EDT)
-- **HEAD:** `Improvements` @ `2e3ba498` (feature) + this docs commit; ahead 2 of touzenesmy/Improvements, UNPUSHED. Tree clean. Service on PID 2495653 (22:56 restart, reverted content).
+- **HEAD:** `Improvements` @ `934b8366` (feature) + this docs commit; ahead 2 of touzenesmy/Improvements, UNPUSHED. Tree clean. Service on PID 2495653 (22:56 restart, reverted content).
 - **Tool-groups (Backlog #1) — floor re-landed, closure-safe (`2e3ba498`).** The tick-wins floor now runs at final consumption: new local `tg_final_disabled` at the agent-bridge call, so the 3603 `all_disabled_names()` re-derivation + turn-contract path can't clobber it. Gate OFF = closure value, byte-identical. The crashing version (`ce6aeb2f`, reverted `2908e02c`/`d259efc3`) rebound the `disabled_tools` closure inside `stream_with_save` -> UnboundLocalError on every run.
 - **Guards (new):** AST test — no Store-context write to `disabled_tools` inside `stream_with_save` (pins the incident class; would have caught ce6aeb2f) + source pins for the floor. 159/159 route+authority green.
 - **E2E dump verdict (22:21, decisive):** stamp carried all 5 groups (`tool_groups_dbg` all 11); force-include correct; ONLY gap = ticked tools re-disabled at final set. That gap is what `2e3ba498` closes.
