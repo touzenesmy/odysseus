@@ -4748,6 +4748,29 @@ def setup_chat_routes(
                                 _tg_f.write(_tg_json.dumps(_tg_dbg, indent=2, default=str))
                         except Exception:
                             pass
+                    # Fork: tick-wins floor at final consumption (Backlog #1,
+                    # gate ODYSSEUS_TOOL_GROUPS=1). Ticked groups' tools are
+                    # un-disabled HERE, at the point the agent bridge consumes
+                    # them, so the earlier re-derivation
+                    # (`disabled_tools = tool_policy.all_disabled_names()` +
+                    # turn-contract path) cannot clobber the floor. NEW LOCAL:
+                    # never rebind `disabled_tools` inside stream_with_save --
+                    # that makes it local to the nested fn and crashes with
+                    # UnboundLocalError (incident 2026-10-18, reverted
+                    # ce6aeb2f). Gate OFF: tg_final_disabled IS the closure
+                    # value, unchanged (byte-identical upstream).
+                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        _tg_final_floor = set()
+                        for _g in {
+                            str(g).strip().lower()
+                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                            if str(g).strip().lower()
+                        }:
+                            _tg_final_floor.update(BUTTON_TOOLS.get(_g, ()))
+                        tg_final_disabled = (disabled_tools or set()) - _tg_final_floor
+                    else:
+                        tg_final_disabled = disabled_tools
                     async for chunk in _sse_keepalive(_stream_agent_with_execution_bridge(
                         _external_execution_bridge(client_runtime_context),
                         sess.endpoint_url,
@@ -4764,7 +4787,7 @@ def setup_chat_routes(
                         active_email=active_email_ctx,
                         session_id=session,
                         history_session=sess,
-                        disabled_tools=disabled_tools if disabled_tools else None,
+                        disabled_tools=tg_final_disabled if tg_final_disabled else None,
                         tool_policy=tool_policy,
                         owner=_user,
                         fallbacks=_foreground_candidates[1:],

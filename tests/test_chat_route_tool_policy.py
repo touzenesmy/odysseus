@@ -879,16 +879,45 @@ def test_frontend_sends_explicit_allow_web_search_false_in_agent_mode():
 
 def test_tool_groups_wire_key_is_read_from_form_and_body():
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
-    assert source.count('form_data.get("tool_groups") or (body or {}).get("tool_groups")') == 2
+    # 3 reads: selection floor (chat_stream) + final-consumption floor
+    # (stream_with_save) + the diagnostic dump.
+    assert source.count('form_data.get("tool_groups") or (body or {}).get("tool_groups")') == 3
 
 
 def test_tool_groups_gate_sites_are_exact():
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
-    # TEMP (tick-wins E2E diagnostic): 4th gate site = the .tg_debug.json dump
-    # in chat_stream; revert to 3 when the diagnostic is removed.
-    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 4, (
-        "gated sites: selection floor + per-group stamp + RAG force-include + diagnostic dump"
+    # TEMP (tick-wins E2E diagnostic): 5th gate site = the .tg_debug.json dump
+    # in chat_stream; revert to 4 when the diagnostic is removed.
+    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 5, (
+        "gated sites: selection floor + per-group stamp + RAG force-include + "
+        "final-consumption floor + diagnostic dump"
     )
+
+
+def test_stream_with_save_never_rebinds_disabled_tools():
+    """Incident 2026-10-18 (reverted ce6aeb2f): `disabled_tools = ...` inside
+    the nested `stream_with_save` made the name local to that function, so the
+    right-hand side read an unbound local -> UnboundLocalError on every agent
+    run. Pin the incident class: no Store-context write to `disabled_tools`
+    anywhere inside stream_with_save; read it via closure, build a NEW local."""
+    import ast
+    tree = ast.parse(_CHAT_ROUTES.read_text(encoding="utf-8"))
+    bad = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "stream_with_save":
+            for sub in ast.walk(node):
+                if getattr(sub, "ctx", None) is ast.Store and (
+                    (isinstance(sub, ast.Name) and sub.id == "disabled_tools")
+                    or (isinstance(sub, ast.Attribute) and sub.attr == "disabled_tools")
+                ):
+                    bad.append(sub.lineno)
+    assert not bad, f"disabled_tools assigned inside stream_with_save at lines {bad}"
+
+
+def test_tool_groups_floor_at_final_consumption():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert "tg_final_disabled = (disabled_tools or set()) - _tg_final_floor" in source
+    assert "disabled_tools=tg_final_disabled if tg_final_disabled else None" in source
 
 
 def test_tool_groups_floor_discards_ticked_groups_from_disabled_tools():
