@@ -4680,6 +4680,38 @@ def setup_chat_routes(
                         if _forced_tools is None:
                             _forced_tools = set()
                         _forced_tools.update({"bash", "ls", "manage_bg_jobs"})
+                    # Fork: tick-wins at the CONTRACT boundary — the agent loop
+                    # offers contract.offered + contract.schemas() (not the
+                    # route kwargs), so button-on groups must be added to the
+                    # contract itself. Post-construction mutation is safe:
+                    # __post_init__ invariants run at construction only (no
+                    # validator callers exist), and permits()/offerers/
+                    # schemas() read the fields dynamically.
+                    if (
+                        _turn_contract is not None
+                        and os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}
+                    ):
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        import json as _tg_json
+                        _tg_c_groups = {
+                            str(g).strip().lower()
+                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                            if str(g).strip().lower()
+                        }
+                        if allow_bash is not None and str(allow_bash).lower() == "true":
+                            _tg_c_groups.add("bash")
+                        _tg_c_added = set()
+                        for _tg_c_g in _tg_c_groups:
+                            _tg_c_added |= set(BUTTON_TOOLS.get(_tg_c_g, ()))
+                        _tg_c_added -= set(_turn_contract.offered)
+                        if _tg_c_added:
+                            _turn_contract.executable = _turn_contract.executable | _tg_c_added
+                            _turn_contract.offered = _turn_contract.offered | _tg_c_added
+                            _turn_contract.schema_json = _turn_contract.schema_json + tuple(
+                                _tg_json.dumps(s, sort_keys=True)
+                                for s in _contract_schemas
+                                if s.get("function", {}).get("name") in _tg_c_added
+                            )
                     if _turn_contract is None:
                         _explicit_selected_tools = selected_tools_for_request(message)
                         if _explicit_selected_tools:
