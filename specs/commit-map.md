@@ -209,3 +209,5 @@ Feature → commit index for the `improvements-20261014` branch, cut 2026-10-14,
 - `b5a1e70d` docs(specs): commit-map + ROADMAP — final backfill (af8c542c/65931be8) + closeout verification entry
 - `813c982d` feat(authority): manage_memory core floor under ODYSSEUS_CORE_TOOL_GRANTS (memory granted every request, like ask_user; flag OFF = upstream floor)
 - `ff5e090f` docs(specs): ROADMAP — resolve restart-pending item (floor verified live) + closeout log entry
+- `915ab5d4` docs(specs): stall-investigation findings + map backfill (ff5e090f) + NEXT(2) memory-dispatch note
+- `c87bdfb9` docs(specs): resolve NEXT(2) — memory snapshot updated, skill v1.16.16, 4-ref sync at 915ab5d4

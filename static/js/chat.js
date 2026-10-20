@@ -2642,8 +2642,7 @@ import { invalidateSettings } from './appConfig.js';
       {
         // Self-healing stamp: the visible button (active class) is the user's
         // truth; the hidden checkbox is transport. If they desync, trust the
-        // button and re-sync. tool_groups_dbg reports cb/btn states at send
-        // time for diagnostics (ignored server-side).
+        // button and re-sync.
         const _tgPairs = [['bash','bash-toggle'],['web','web-toggle'],['sessions','sessions-toggle'],['media','media-toggle'],['browser','browser-toggle']];
         const _tg = [];
         for (const [g, id] of _tgPairs) {
