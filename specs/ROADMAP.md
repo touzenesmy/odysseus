@@ -15,7 +15,14 @@
 >   (`user-odysseus-fork`) and in the files themselves — don't duplicate them
 >   here; link.
 
-## Status (2026-10-20, ~18:40 EDT) — REVERTED, running on pre-rebase baseline
+## Status (2026-10-21, ~18:40 EDT) — BRANCH MOVE: ImprovementsDev is the active work branch; 2014 FROZEN as port source
+- **Layout (live-verified):** PROD worktree `/home/samy/odysseus` detached @ `improvements-20261012` = `207df1c0` — service `odysseus` active, PID 3165292 (started Tue 2026-10-20 15:51:17 EDT). DEV worktree `/home/samy/odysseus-dev` on `ImprovementsDev` @ `80c2d98a` (base `2ca1e255`, parent = upstream/dev `8877273e` = post-#6742 + pre-Ajax runtime migration + Oct 2–6 fix(security) series) — the post-security port branch.
+- **Execution plan:** `ImprovementsDev:specs/PORT-GUIDE.md` (pushed `fc3f14cb` → `80c2d98a`): 173-commit delta classified per commit (CLEAN 55 / RE-VERIFY 61 / ADAPT 52 / ABANDON 5 / ALREADY-IN-UPSTREAM 0), 25 upstream∩Scaffold overlap files, 3-chunk plan (chunk 1 = 94 mechanical), `afecd44d` launch-scope test matrix (§C.2), rollback ladder (§E), dual-version deploy state (§F).
+- **`improvements-20261014` (this branch) = FROZEN PORT SOURCE @ `1d7a89a5`:** its `specs/commit-map.md` (173 commits, groups A–P) + this ROADMAP (through the 10-20 revert) are the historical record — no new work lands here. The 10-20 Status NEXT(2) below ("treat improvements-20261014 as the work branch of record") is SUPERSEDED by this entry.
+- **Deploy:** branch switching = `/home/samy/odysseus/deploy.sh [dev|Improvements|ImprovementsDev]` (gitignored, in the prod worktree, survives checkouts): snapshots `data/` → `data.snapshots/`, detaches the prod worktree to the target, runs the target branch's `update.sh`, restarts the service. Prod stays on 2012 until ImprovementsDev proves stable for DAYS (PORT-GUIDE §E).
+- **NEXT:** execute PORT-GUIDE chunk 1 in `/home/samy/odysseus-dev` (focused tests per chunk via `/home/samy/odysseus/venv/bin/python`); user deploys via `deploy.sh ImprovementsDev` once a chunk is green.
+
+### Status (2026-10-20, ~18:40 EDT) — SUPERSEDED by the 10-21 branch-move status above (history) — REVERTED, running on pre-rebase baseline
 - **HEAD:** `Improvements` = `improvements-20261012` @ `207df1c0` (2026-10-10), tree clean, pushed (3-way sync with touzenesmy/Improvements). Service restarted on it 2026-10-20 15:51 EDT (PID 3165292).
 - **What the revert rolled back:** all 712 commits from 2026-10-12→10-20 — the completed **tool-group buttons** (5 groups, tick-wins chain, verified live 10-19), the **memory floor** (`813c982d`), thinking-stream + file-tool button, stall work, specs backfill. None of it is lost: all preserved in `improvements-20261014` @ `16b20795` (pushed; `git branch -f Improvements improvements-20261014` re-lands it after a service restart, per the dated-branch convention).
 - **Why (user, 10-20):** the rebase onto upstream was reverted; "the whole new security patch is hell" and upstream isn't even done — see **Upstream security patch — not done** below.
