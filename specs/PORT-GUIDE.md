@@ -295,3 +295,16 @@ next chunk, or for Chunk 3: hold ImprovementsDev for days before touching produc
 4. "yaml allow_unicode" misc fix → **not in the 173 delta** (0 hits at MB, upstream/dev, Scaffold, and no matching commit subject).
 5. Confirmed correct: `authority.py` zero upstream changes since MB; `Scaffold=1d7a89a5`; prod ref `207df1c0`; 44/173 counts; MB `a8c147b2` (2026-10-07); `813c982d` memory floor; `6fceb6cc` fail-closed images.
 6. New finding: the new base **already carries the fork's `update.sh`** (commit `2ca1e255`) — group A is a merge, not a cherry-pick (see §B row A).
+
+## F — Dual-version deploy state (live-verified 2026-10-21)
+
+| Item | Value |
+|---|---|
+| PROD worktree | `/home/samy/odysseus` — detached @ `improvements-20261012` = `207df1c0`; service `odysseus` active, PID 3165292 (started Tue 2026-10-20 15:51:17 EDT); venv, `.env`, `data/`, `logs/` all live here |
+| DEV worktree | `/home/samy/odysseus-dev` — `ImprovementsDev` @ `80c2d98a` (this guide); no venv of its own — run its tests with `/home/samy/odysseus/venv/bin/python`; no service runs from it |
+| Port source | `improvements-20261014` = `Scaffold` @ `1d7a89a5` — FROZEN; its `specs/commit-map.md` (173 commits, A–P) + `specs/ROADMAP.md` (through the 10-20 revert) = historical record; no new work lands there |
+| Switcher | `/home/samy/odysseus/deploy.sh [dev\|Improvements\|ImprovementsDev]` (gitignored, in the prod worktree, survives checkouts): snapshots `data/` → `data.snapshots/`, detaches the prod worktree to the target, runs the target branch's `update.sh`, restarts the service |
+| `Improvements` alias | = `207df1c0` (deliberate, at 2012) — do NOT re-alias without the user |
+| Snapshots | `data.snapshots/` not yet created — created on the first `deploy.sh` switch |
+
+Chunk go/no-go (§E) is evaluated on ImprovementsDev in the dev worktree; the user deploys with `deploy.sh ImprovementsDev` only after a chunk's focused tests are green and the live smoke test passes. Prod stays on 2012 until §E's stability bar (days, not hours) is met.
