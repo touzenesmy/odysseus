@@ -1,11 +1,15 @@
 """Offline regressions for incident roots, unaffected roots, and CA directories."""
 
 import contextlib
+import hashlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
+import shutil
 import ssl
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -16,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("check_ca_trust", ROOT / "scripts/check_ca_trust.py")
 checker = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(checker)
+INCIDENT = json.loads((ROOT / "tests/fixtures/ca-trust/incident.json").read_text())
 
 
 class CATrustTests(unittest.TestCase):
@@ -27,6 +32,10 @@ class CATrustTests(unittest.TestCase):
         cls.fixtures = Path(cls.temporary.name)
         for name, pem in PUBLIC_CERTIFICATES.items():
             (cls.fixtures / name).write_text(pem)
+        for fingerprint, pem in INCIDENT["certificates"].items():
+            if hashlib.sha256(ssl.PEM_cert_to_DER_cert(pem)).hexdigest() != fingerprint:
+                raise ValueError("incident fixture fingerprint mismatch")
+            (cls.fixtures / f"{fingerprint}.pem").write_text(pem)
 
     @classmethod
     def tearDownClass(cls):
@@ -50,6 +59,74 @@ class CATrustTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "AAA Certificate Services"):
                 checker.check_bundle(bundle)
 
+    def test_all_published_intermediates_and_cross_signs_are_rejected(self):
+        self.assertEqual(len(INCIDENT["intermediates"]), 16)
+        for fingerprint, name in INCIDENT["intermediates"].items():
+            with self.subTest(certificate=name), self.assertRaisesRegex(ValueError, "affected CA certificates"):
+                checker.check_bundle(self.fixtures / f"{fingerprint}.pem")
+
+    def test_published_roots_and_cross_signed_issuer_are_rejected(self):
+        certificates = INCIDENT["roots"] | INCIDENT["cross_signed_roots"]
+        self.assertEqual(len(certificates), 5)
+        for fingerprint, name in certificates.items():
+            with self.subTest(certificate=name), self.assertRaises(ValueError):
+                checker.check_bundle(self.fixtures / f"{fingerprint}.pem")
+
+    def test_clean_roots_do_not_hide_an_added_compromised_intermediate(self):
+        fingerprint = next(iter(INCIDENT["intermediates"]))
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = Path(tmp) / "custom.pem"
+            bundle.write_text(PUBLIC_CERTIFICATES["emsign-g1.pem"] + INCIDENT["certificates"][fingerprint])
+            with self.assertRaisesRegex(ValueError, "EM DV TLS CA - G3B"):
+                checker.check_bundle(bundle)
+
+    @unittest.skipUnless(shutil.which("openssl"), "offline chain verification requires OpenSSL")
+    def test_published_chains_and_custom_anchor_with_affected_positive_control(self):
+        # Freeze time inside the public fixtures' validity interval. Otherwise
+        # expiry could make an ineffective trust-store fix appear successful.
+        help_result = subprocess.run(["openssl", "verify", "-help"], capture_output=True, text=True)
+        no_store = ["-no-CAstore"] if "-no-CAstore" in help_result.stdout + help_result.stderr else []
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            affected = directory / "affected.pem"
+            affected.write_text("".join(INCIDENT["certificates"][key] for key in INCIDENT["roots"]))
+            clean = self.fixtures / "emsign-g1.pem"
+            custom = directory / "custom.pem"
+            fingerprint = next(iter(INCIDENT["intermediates"]))
+            custom.write_text(clean.read_text() + INCIDENT["certificates"][fingerprint])
+            self.assertEqual(len(INCIDENT["chains"]), 12)
+            custom_accepted = []
+            for hostname, chain in INCIDENT["chains"].items():
+                leaf, intermediates = directory / "leaf.pem", directory / "chain.pem"
+                leaf.write_text(INCIDENT["certificates"][chain[0]])
+                intermediates.write_text("".join(INCIDENT["certificates"][key] for key in chain[1:]))
+
+                def verify(bundle):
+                    return subprocess.run([
+                        "openssl", "verify", "-no-CApath", *no_store,
+                        "-attime", str(INCIDENT["verification_time"]),
+                        "-partial_chain", "-x509_strict", "-purpose", "sslserver",
+                        "-verify_hostname", hostname, "-CAfile", str(bundle),
+                        "-untrusted", str(intermediates), str(leaf),
+                    ], capture_output=True, text=True)
+
+                with self.subTest(hostname=hostname):
+                    positive = verify(affected)
+                    self.assertEqual(positive.returncode, 0, positive.stderr)
+                    negative = verify(clean)
+                    self.assertNotEqual(negative.returncode, 0)
+                    self.assertIn("unable to get local issuer certificate", negative.stderr)
+                    if verify(custom).returncode == 0:
+                        custom_accepted.append(hostname)
+            self.assertEqual(custom_accepted, [
+                "dv-g3b-aaa-emudhra.we-have-a-problem.com",
+                "dv-g3b-emudhra.we-have-a-problem.com",
+            ])
+            checker.check_bundle(clean)
+            for bundle in (affected, custom):
+                with self.subTest(bundle=bundle.name), self.assertRaises(ValueError):
+                    checker.check_bundle(bundle)
+
     def test_empty_malformed_and_missing_bundles_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             for content in ("", "not a certificate"):
@@ -59,6 +136,48 @@ class CATrustTests(unittest.TestCase):
                     checker.check_bundle(path)
             with self.assertRaises(OSError):
                 checker.check_bundle(Path(tmp) / "missing.pem")
+
+    def test_each_configured_override_is_checked(self):
+        fingerprint = next(iter(INCIDENT["intermediates"]))
+        affected = self.fixtures / f"{fingerprint}.pem"
+        clean = self.fixtures / "emsign-g1.pem"
+        for name in ("LLM_CA_BUNDLE", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+                     "PIP_CERT", "NODE_EXTRA_CA_CERTS", "GRPC_DEFAULT_SSL_ROOTS_FILE_PATH"):
+            for bundle, expected in ((clean, 0), (affected, 1)):
+                with self.subTest(variable=name, bundle=bundle.name), patch.dict(
+                    os.environ, {name: str(bundle)}, clear=True
+                ), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(checker.main(["--overrides", str(clean)]), expected)
+
+    def test_invalid_override_is_not_hidden_by_a_clean_explicit_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name, content in (("empty.pem", ""), ("malformed.pem", "invalid")):
+                (directory / name).write_text(content)
+            for name in ("missing.pem", "empty.pem", "malformed.pem"):
+                with self.subTest(file=name), patch.dict(
+                    os.environ, {"LLM_CA_BUNDLE": str(directory / name)}, clear=True
+                ), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(checker.main(["--overrides", str(self.fixtures / "emsign-g1.pem")]), 1)
+
+    def test_no_configured_overrides_does_not_report_validated_stores(self):
+        with patch.dict(os.environ, {"LLM_CA_BUNDLE": "  "}, clear=True), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(checker.main(["--overrides"]), 1)
+
+    def test_requests_directory_override_checks_hashed_intermediates(self):
+        fingerprint = next(iter(INCIDENT["intermediates"]))
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name in ("REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "PIP_CERT"):
+                with self.subTest(variable=name), patch.dict(os.environ, {name: str(directory)}, clear=True):
+                    for content, expected in ((PUBLIC_CERTIFICATES["emsign-g1.pem"], 0),
+                                              (INCIDENT["certificates"][fingerprint], 1)):
+                        (directory / "12345678.0").write_text(content)
+                        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                            self.assertEqual(checker.main(["--overrides"]), expected)
+                    (directory / "12345678.0").unlink()
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        self.assertEqual(checker.main(["--overrides"]), 1)
 
     def test_safe_cafile_does_not_hide_stale_hashed_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
