@@ -75,6 +75,20 @@ class CATrustTests(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertIn("emSign ECC Root CA - G3", errors.getvalue())
 
+    def test_hashed_non_ca_certificate_does_not_reject_clean_store(self):
+        # Ubuntu's OpenSSL directory can also hash ssl-cert-snakeoil.pem.
+        # A valid server certificate has no CA entries in get_ca_certs().
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "ce275665.0").symlink_to(self.fixtures / "localhost-leaf.pem")
+            defaults = ssl.get_default_verify_paths()._replace(
+                cafile=str(self.fixtures / "emsign-g1.pem"), capath=str(directory)
+            )
+            with patch.object(checker.ssl, "get_default_verify_paths", return_value=defaults), patch.dict(
+                os.environ, {defaults.openssl_capath_env: str(directory)}
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(checker.main(["--system"]), 0)
+
     def test_multiple_ca_directories_are_all_checked(self):
         with tempfile.TemporaryDirectory() as tmp:
             clean, stale = Path(tmp) / "clean", Path(tmp) / "stale"
@@ -96,6 +110,16 @@ class CATrustTests(unittest.TestCase):
 
 # Public Mozilla CA certificates; provenance: tests/fixtures/ca-trust/README.md.
 PUBLIC_CERTIFICATES = {
+    'localhost-leaf.pem': """-----BEGIN CERTIFICATE-----
+MIIBOTCB7KADAgECAhRcVxnOQNEFWf92K4dm4I8ChyjVMzAFBgMrZXAwFDESMBAG
+A1UEAwwJbG9jYWxob3N0MB4XDTI2MTAyMTE4NTgwN1oXDTM2MTAxODE4NTgwN1ow
+FDESMBAGA1UEAwwJbG9jYWxob3N0MCowBQYDK2VwAyEARglphvNgp9qRCESLHnuu
+W8VC5urdZl+YgS+Ux1BoLryjUDBOMB0GA1UdDgQWBBSaEckyR/76lX3a5Ijh8B42
+oJwN1DAfBgNVHSMEGDAWgBSaEckyR/76lX3a5Ijh8B42oJwN1DAMBgNVHRMBAf8E
+AjAAMAUGAytlcANBAJkq9ayy+d4AUZnjhWM31rFke5DT+l9QFcPl34+dpVhqJV/L
+m4IpPHYagqrBRHn9Dv/C8qYyPBKnAwJRpNptsgw=
+-----END CERTIFICATE-----
+""",
     'aaa.pem': """-----BEGIN CERTIFICATE-----
 MIIEMjCCAxqgAwIBAgIBATANBgkqhkiG9w0BAQUFADB7MQswCQYDVQQGEwJHQjEb
 MBkGA1UECAwSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYDVQQHDAdTYWxmb3JkMRow

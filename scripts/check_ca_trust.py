@@ -30,9 +30,12 @@ def check_bundle(path: Path) -> None:
     """Raise on an unreadable, empty, malformed, or affected CA bundle."""
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.load_verify_locations(cafile=str(path))
+    # A hashed OpenSSL directory can include valid non-CA certificates (for
+    # example Ubuntu's snakeoil server certificate). get_ca_certs() omits them;
+    # use the total X.509 count to distinguish these from an empty store.
+    if not context.cert_store_stats()["x509"]:
+        raise ValueError("no certificates")
     certificates = context.get_ca_certs(binary_form=True)
-    if not certificates:
-        raise ValueError("no CA certificates")
     blocked = {
         BLOCKED_ROOTS[fingerprint]
         for certificate in certificates
