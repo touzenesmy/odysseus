@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import ssl
 import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -43,6 +44,43 @@ class CATrustTests(unittest.TestCase):
 
     def test_unaffected_emsign_root_remains_usable(self):
         checker.check_bundle(self.fixtures / "emsign-g1.pem")
+
+    def test_verbose_python_check_reports_and_rejects_affected_user_bundle(self):
+        # A fresh interpreter must see persisted user packages, independently
+        # of pytest's imported certifi/pip modules and any active test venv.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            env = dict(os.environ, HOME=str(home), PYTHONUSERBASE=str(home / ".local"))
+            env.pop("PYTHONNOUSERSITE", None)
+            env.pop("PYTHONPATH", None)
+            python = getattr(sys, "_base_executable", sys.executable)
+            site_result = subprocess.run(
+                [python, "-m", "site", "--user-site"], env=env, capture_output=True, text=True,
+            )
+            self.assertEqual(site_result.returncode, 0, site_result.stderr)
+            user_site = Path(site_result.stdout.strip())
+            for package in ("certifi", "pip", "pip/_vendor", "pip/_vendor/certifi"):
+                directory = user_site / package
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / "__init__.py").write_text(
+                    "from pathlib import Path\ndef where(): return str(Path(__file__).with_name('cacert.pem'))\n"
+                )
+            application_bundle = user_site / "certifi/cacert.pem"
+            pip_bundle = user_site / "pip/_vendor/certifi/cacert.pem"
+            for bundle in (application_bundle, pip_bundle):
+                bundle.write_text(PUBLIC_CERTIFICATES["emsign-g1.pem"])
+            command = [python, str(ROOT / "scripts/check_ca_trust.py"), "--python", "--verbose"]
+            clean = subprocess.run(command, env=env, capture_output=True, text=True)
+            self.assertEqual(clean.returncode, 0, clean.stderr)
+            self.assertIn(str(application_bundle), clean.stdout)
+            self.assertIn(str(pip_bundle), clean.stdout)
+            self.assertIn(str(home), clean.stdout)
+            self.assertIn("Python executable:", clean.stdout)
+            application_bundle.write_text(PUBLIC_CERTIFICATES["emsign-g3.pem"])
+            affected = subprocess.run(command, env=env, capture_output=True, text=True)
+            self.assertEqual(affected.returncode, 1, affected.stderr)
+            self.assertIn(str(application_bundle), affected.stderr)
+            self.assertIn("emSign ECC Root CA - G3", affected.stderr)
 
     def test_compromised_emsign_path_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "emSign ECC Root CA - G3"):

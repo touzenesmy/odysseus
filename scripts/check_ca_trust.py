@@ -135,9 +135,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--python", action="store_true", help="check certifi and pip's separate vendored bundle")
     parser.add_argument("--grpc", action="store_true", help="check gRPC's selected default CA file")
     parser.add_argument("--overrides", action="store_true", help="check configured LLM/HTTPX/Requests/pip/Node/gRPC CA overrides")
+    parser.add_argument("--verbose", action="store_true", help="show the runtime identity, Python executable and selected CA paths")
     args = parser.parse_args(argv)
     if not (args.bundles or args.system or args.python or args.grpc or args.overrides):
         parser.error("select --system, --python, --grpc, --overrides, or explicit PEM bundle paths")
+    if args.verbose:
+        print(f"Python executable: {sys.executable}")
+        print(f"Python prefix: {sys.prefix}")
+        print(f"User home: {Path.home()}")
+        if hasattr(os, "geteuid"):
+            print(f"Effective user: uid={os.geteuid()} gid={os.getegid()}")
     try:
         paths = list(args.bundles)
         if args.system:
@@ -154,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("no CA bundle files selected; also select --system, --python, or an explicit path")
         errors = []
         for path in paths:
+            if args.verbose:
+                print(f"CA bundle: {path}")
             try:
                 check_bundle(path)
             except (OSError, ValueError, ssl.SSLError) as exc:
