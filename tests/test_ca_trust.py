@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import ssl
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -106,6 +107,41 @@ class CATrustTests(unittest.TestCase):
                     result = checker.main(["--system"])
             self.assertEqual(result, 1)
             self.assertIn("AAA Certificate Services", errors.getvalue())
+
+    def test_grpc_bundled_roots_are_checked_without_an_override(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary) / "grpc"
+            bundle = package / "_cython" / "_credentials" / "roots.pem"
+            bundle.parent.mkdir(parents=True)
+            bundle.write_bytes((self.fixtures / "emsign-g3.pem").read_bytes())
+            errors = io.StringIO()
+            with patch.dict(os.environ, {"GRPC_DEFAULT_SSL_ROOTS_FILE_PATH": ""}), patch.object(
+                checker.importlib.util, "find_spec", return_value=SimpleNamespace(origin=str(package / "__init__.py"))
+            ), contextlib.redirect_stderr(errors):
+                self.assertEqual(checker.main(["--grpc"]), 1)
+            self.assertIn("emSign ECC Root CA - G3", errors.getvalue())
+
+    def test_grpc_explicit_clean_store_replaces_the_independent_bundle(self):
+        with patch.dict(os.environ, {"GRPC_DEFAULT_SSL_ROOTS_FILE_PATH": str(self.fixtures / "emsign-g1.pem")}), patch.object(
+            checker.importlib.util, "find_spec", side_effect=AssertionError("must use the explicit store")
+        ), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(checker.main(["--grpc"]), 0)
+
+    def test_grpc_invalid_override_does_not_fall_back_silently(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            for name, content in (("empty.pem", ""), ("malformed.pem", "not a certificate"), ("affected.pem", PUBLIC_CERTIFICATES["aaa.pem"])):
+                bundle = Path(temporary) / name
+                bundle.write_text(content)
+                with self.subTest(name=name), patch.dict(os.environ, {"GRPC_DEFAULT_SSL_ROOTS_FILE_PATH": str(bundle)}), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(checker.main(["--grpc"]), 1)
+            with patch.dict(os.environ, {"GRPC_DEFAULT_SSL_ROOTS_FILE_PATH": str(Path(temporary) / "missing.pem")}), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(checker.main(["--grpc"]), 1)
+
+    def test_grpc_check_reports_a_missing_installation(self):
+        with patch.dict(os.environ, {"GRPC_DEFAULT_SSL_ROOTS_FILE_PATH": ""}), patch.object(
+            checker.importlib.util, "find_spec", return_value=None
+        ), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(checker.main(["--grpc"]), 1)
 
 
 # Public Mozilla CA certificates; provenance: tests/fixtures/ca-trust/README.md.

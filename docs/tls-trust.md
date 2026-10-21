@@ -21,14 +21,18 @@ python scripts/check_ca_trust.py --system --python
 
 Explicit PEM bundles can also be passed as positional arguments. The check rejects the incident's known root fingerprints and malformed/empty bundles. It does not model native OS intermediate revocation, custom TLS implementations, or arbitrary certificates added by an operator.
 
-Both Docker build stages refresh system CA certificates and bootstrap pip/certifi before dependency installation. The build fails if affected roots remain. Node uses the corrected system store through `--use-openssl-ca`. Rebuild with a fresh base and dependency layers when remediating an existing deployment:
+Both Docker build stages refresh system CA certificates and bootstrap pip/certifi before dependency installation. The build fails if affected roots remain. Node uses the corrected system store through `--use-openssl-ca`. Python gRPC uses that same PEM file through `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH`; updating certifi alone does not replace gRPC's independent wheel bundle. After dependency installation, the image checks gRPC's selected file as well. An explicit gRPC override must be readable and free of the incident roots: gRPC can otherwise fall back to its affected bundled defaults.
+
+Chromium uses a separate trust store. The Docker image installs a managed `CADistrustedCertificates` policy for the eight compromised intermediate public keys, covering their cross-signs without depending on background revocation updates. It adds no trusted certificate and does not disable certificate verification. The policy and public-certificate provenance are documented in [the browser policy note](../docker/chromium-ca-policy.md). Native browser installations and independently managed profiles require their own platform policy or vendor update; this image policy does not configure host browsers.
+
+Rebuild with a fresh base and dependency layers when remediating an existing deployment:
 
 ```sh
 docker compose build --pull --no-cache odysseus
 docker compose up -d odysseus
-docker compose exec odysseus python scripts/check_ca_trust.py --system --python
+docker compose exec odysseus python scripts/check_ca_trust.py --system --python --grpc
 ```
 
 SearXNG is a separate HTTPS client and image; updating the Odysseus image does not patch it. Inspect its effective CA path and update or rebuild that image independently. Also inspect persisted `/app/.local` packages, remote Cookbook environments, and externally configured MCP runtimes. Image replacement does not necessarily replace those environments.
 
-For behavioral validation, all twelve [published test chains](https://emudhra.we-have-a-problem.com/chains.zip), including the AAA cross-signs, must fail certificate verification through the effective stores. Confirm that an ordinary known-good HTTPS request still succeeds. Package versions and a successful image build alone do not prove that a running deployment selects the corrected store.
+For behavioral validation, all twelve [published test chains](https://emudhra.we-have-a-problem.com/chains.zip), including the AAA cross-signs, must fail certificate verification through the effective stores. Confirm that an ordinary known-good HTTPS request still succeeds. In Chromium, confirm the managed policy is loaded at `chrome://policy` and test the incident endpoints through the actual browser path with certificate verification enabled. The PEM checker cannot inspect Chromium's policy or its active verifier. Package versions and a successful image build alone do not prove that a running deployment selects the corrected store.

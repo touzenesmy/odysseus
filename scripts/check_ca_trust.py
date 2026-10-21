@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -64,14 +65,28 @@ def system_paths() -> list[Path]:
     return paths
 
 
+def grpc_roots_path() -> Path:
+    """Select gRPC's override or its independent Python-wheel default bundle."""
+    override = os.environ.get("GRPC_DEFAULT_SSL_ROOTS_FILE_PATH")
+    if override:
+        # gRPC can fall back to its bundled roots when this file is unreadable.
+        # Check the configured file strictly instead of blessing that fallback.
+        return Path(override)
+    spec = importlib.util.find_spec("grpc")
+    if spec is None or spec.origin is None:
+        raise ImportError("grpcio is not installed; cannot check its default roots")
+    return Path(spec.origin).parent / "_cython" / "_credentials" / "roots.pem"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundles", nargs="*", type=Path)
     parser.add_argument("--system", action="store_true", help="check effective OpenSSL PEM stores")
     parser.add_argument("--python", action="store_true", help="check certifi and pip's separate vendored bundle")
+    parser.add_argument("--grpc", action="store_true", help="check gRPC's selected default CA file")
     args = parser.parse_args(argv)
-    if not (args.bundles or args.system or args.python):
-        parser.error("select --system, --python, or explicit PEM bundle paths")
+    if not (args.bundles or args.system or args.python or args.grpc):
+        parser.error("select --system, --python, --grpc, or explicit PEM bundle paths")
     try:
         paths = list(args.bundles)
         if args.system:
@@ -79,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.python:
             for name in ("certifi", "pip._vendor.certifi"):
                 paths.append(Path(importlib.import_module(name).where()))
+        if args.grpc:
+            paths.append(grpc_roots_path())
         paths = list(dict.fromkeys(path.resolve() for path in paths))
         errors = []
         for path in paths:

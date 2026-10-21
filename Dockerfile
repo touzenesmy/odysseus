@@ -61,7 +61,12 @@ RUN python /usr/local/bin/check-ca-trust.py --system
 COPY requirements-bootstrap.txt /tmp/requirements-bootstrap.txt
 RUN python -m pip install --no-cache-dir --require-hashes --only-binary=:all: --no-deps -r /tmp/requirements-bootstrap.txt \
     && python /usr/local/bin/check-ca-trust.py --python
-ENV NODE_OPTIONS=--use-openssl-ca
+ENV NODE_OPTIONS=--use-openssl-ca \
+    GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=/etc/ssl/certs/ca-certificates.crt
+
+# Chromium has a separate root store. Distrust the compromised intermediate
+# public keys explicitly, including cross-signs, without waiting for CRL updates.
+COPY docker/chromium-emudhra.json /etc/chromium/policies/managed/odysseus-emudhra.json
 
 # Private browser automation wrapper used by the native `private_browser` tool.
 # Chromium is installed above, so agent-browser can drive the existing browser
@@ -122,6 +127,10 @@ RUN pip install --no-cache-dir python-magic==0.4.27
 COPY --from=realesrgan-wheels /wheels/ /tmp/odysseus-wheels/
 RUN pip install --no-cache-dir --no-deps /tmp/odysseus-wheels/*.whl \
     && rm -rf /tmp/odysseus-wheels
+
+# Check gRPC's effective defaults after all Python dependencies are installed.
+# Its wheel can retain affected roots even when pip/certifi are current.
+RUN python /usr/local/bin/check-ca-trust.py --system --python --grpc
 
 # Copy app code
 COPY . .
