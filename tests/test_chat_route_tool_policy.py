@@ -763,9 +763,10 @@ def test_web_intent_bash_guard_in_route_source():
     match (e.g. the word 'today' in a coding message)."""
     source = _CHAT_ROUTES.read_text(encoding="utf-8")
     assert "_bash_explicitly_on = allow_bash is not None" in source
-    # The guard must appear BEFORE the web-intent block consumes it.
+    # The guard must appear BEFORE the web-intent block consumes it. (The
+    # block's condition is multi-line: "if (\n    _explicit_web_intent ...".)
     guard = source.index("_bash_explicitly_on = allow_bash is not None")
-    web_block = source.index("if _explicit_web_intent:")
+    web_block = source.index("if (\n            _explicit_web_intent")
     assert guard < web_block, (
         "_bash_explicitly_on must be defined before the web-intent strip"
     )
@@ -867,4 +868,89 @@ def test_frontend_sends_explicit_allow_web_search_false_in_agent_mode():
     source = _CHAT_JS.read_text(encoding="utf-8")
     assert "fd.append('allow_web_search', el('web-toggle').checked ? 'true' : 'false')" in source, (
         "Frontend must send explicit allow_web_search=false in agent mode when toggle is off"
+    )
+
+
+# --- Fork: tool-group buttons (Backlog #1) — gate ODYSSEUS_TOOL_GROUPS ---
+# The floor / stamp / RAG force-include blocks are inline in the chat route
+# (no helper), so pin them the way the rest of this file does: exact source
+# strings. If these lines move, the tests move with them (same convention as
+# the allow_bash / allow_documents assertions above).
+
+
+def test_tool_groups_wire_key_is_read_from_form_and_body():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    # 4 reads: selection floor (chat_stream) + contract-boundary offer +
+    # RAG force-include + final-consumption floor (stream_with_save).
+    assert source.count('form_data.get("tool_groups") or (body or {}).get("tool_groups")') == 4
+
+
+def test_tool_groups_gate_sites_are_exact():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert source.count('os.environ.get("ODYSSEUS_TOOL_GROUPS"') == 5, (
+        "gated sites: selection floor + per-group stamp + RAG force-include + "
+        "final-consumption floor + contract-boundary offer"
+    )
+
+
+def test_stream_with_save_never_rebinds_disabled_tools():
+    """Incident 2026-10-18 (reverted ce6aeb2f): `disabled_tools = ...` inside
+    the nested `stream_with_save` made the name local to that function, so the
+    right-hand side read an unbound local -> UnboundLocalError on every agent
+    run. Pin the incident class: no Store-context write to `disabled_tools`
+    anywhere inside stream_with_save; read it via closure, build a NEW local."""
+    import ast
+    tree = ast.parse(_CHAT_ROUTES.read_text(encoding="utf-8"))
+    bad = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "stream_with_save":
+            for sub in ast.walk(node):
+                if getattr(sub, "ctx", None) is ast.Store and (
+                    (isinstance(sub, ast.Name) and sub.id in ("disabled_tools", "tool_policy"))
+                    or (isinstance(sub, ast.Attribute) and sub.attr in ("disabled_tools", "tool_policy"))
+                ):
+                    bad.append(sub.lineno)
+    assert not bad, f"disabled_tools/tool_policy assigned inside stream_with_save at lines {bad}"
+
+
+def test_tool_groups_floor_at_final_consumption():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert "tg_final_disabled = (disabled_tools or set()) - _tg_final_floor" in source
+    assert "tg_final_policy = build_effective_tool_policy(" in source
+    assert "tool_policy=tg_final_policy," in source
+    assert "disabled_tools=tg_final_disabled if tg_final_disabled else None" in source
+
+
+def test_tool_groups_floor_discards_ticked_groups_from_disabled_tools():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'disabled_tools.difference_update(BUTTON_TOOLS.get(_g, ()))' in source
+
+
+def test_tool_groups_stamp_carries_per_group_effective_state():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'client_runtime_context["web_ui_state"].update({' in source
+    assert '"sessions": "list_sessions" not in disabled_tools' in source
+    assert '"browser": "private_browser" not in disabled_tools' in source
+
+
+def test_tool_groups_rag_force_include_generalizes_allow_bash():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert "_forced_tools.update(BUTTON_TOOLS[_g])" in source
+
+
+def test_frontend_sends_tool_groups_stamp():
+    source = _CHAT_JS.read_text(encoding="utf-8")
+    assert "fd.append('tool_groups', _tg.join(','))" in source
+
+
+def test_tool_groups_unticked_groups_are_ceiling():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert 'if "tool_groups" in form_data or "tool_groups" in (body or {}):' in source
+    assert "disabled_tools.update(_tools)" in source
+
+
+def test_tool_groups_force_include_survives_forced_tools_clobbers():
+    source = _CHAT_ROUTES.read_text(encoding="utf-8")
+    assert source.index("_forced_tools = set(_turn_contract.offered)") < source.rindex("BUTTON_TOOLS[_g]"), (
+        "tick force-include must be placed after the wholesale _forced_tools clobbers"
     )

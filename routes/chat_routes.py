@@ -3611,6 +3611,32 @@ def setup_chat_routes(
             from src.tool_security import plan_mode_disabled_tools
             disabled_tools.update(plan_mode_disabled_tools())
 
+        # Fork: tool-group buttons (Backlog #1, gate ODYSSEUS_TOOL_GROUPS=1).
+        # The `tool_groups` wire key carries the ticked group names (comma
+        # list); the bash group also lights from the existing allow_bash
+        # toggle. A ticked group is a floor: its tools are never stripped
+        # from the policy, whatever RAG or intent strips say below — the
+        # button is the user's word. Gate OFF: block is a no-op.
+        if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+            from src.agent_runtime.authority import BUTTON_TOOLS
+            _tool_groups_on = {
+                str(g).strip().lower()
+                for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                if str(g).strip().lower()
+            }
+            if allow_bash is not None and str(allow_bash).lower() == "true":
+                _tool_groups_on.add("bash")
+            for _g in _tool_groups_on:
+                disabled_tools.difference_update(BUTTON_TOOLS.get(_g, ()))
+            # Tick wins, both directions (user rule 2026-10-18): a client
+            # that sends the tool_groups key (the web UI always does) also
+            # gets a ceiling -- unticked groups are disabled outright so
+            # RAG / turn-contract selection cannot resurrect them. Clients
+            # without the key (API / legacy callers) are untouched.
+            if "tool_groups" in form_data or "tool_groups" in (body or {}):
+                for _g, _tools in BUTTON_TOOLS.items():
+                    if _g not in _tool_groups_on:
+                        disabled_tools.update(_tools)
         tool_policy = build_effective_tool_policy(
             disabled_tools=disabled_tools,
             last_user_message=message,
@@ -3642,6 +3668,15 @@ def setup_chat_routes(
                 "manage_documents", "create_document", "edit_document", "update_document",
             }.issubset(disabled_tools),
         }
+        if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+            # Fork: per-group effective state for the authority grant.
+            # "web"/"bash" keys already carry those groups (the floor above
+            # keeps them out of disabled_tools when ticked); the rest are new.
+            client_runtime_context["web_ui_state"].update({
+                "sessions": "list_sessions" not in disabled_tools,
+                "media": "inspect_media" not in disabled_tools,
+                "browser": "private_browser" not in disabled_tools,
+            })
         # Capture permission state before schema selection/reconciliation.
         # Only deterministic request intent supplies grants, never inventory.
         _request_authority = request_authority_for_http(
@@ -4697,6 +4732,38 @@ def setup_chat_routes(
                         if _forced_tools is None:
                             _forced_tools = set()
                         _forced_tools.update({"bash", "ls", "manage_bg_jobs"})
+                    # Fork: tick-wins at the CONTRACT boundary — the agent loop
+                    # offers contract.offered + contract.schemas() (not the
+                    # route kwargs), so button-on groups must be added to the
+                    # contract itself. Post-construction mutation is safe:
+                    # __post_init__ invariants run at construction only (no
+                    # validator callers exist), and permits()/offerers/
+                    # schemas() read the fields dynamically.
+                    if (
+                        _turn_contract is not None
+                        and os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}
+                    ):
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        import json as _tg_json
+                        _tg_c_groups = {
+                            str(g).strip().lower()
+                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                            if str(g).strip().lower()
+                        }
+                        if allow_bash is not None and str(allow_bash).lower() == "true":
+                            _tg_c_groups.add("bash")
+                        _tg_c_added = set()
+                        for _tg_c_g in _tg_c_groups:
+                            _tg_c_added |= set(BUTTON_TOOLS.get(_tg_c_g, ()))
+                        _tg_c_added -= set(_turn_contract.offered)
+                        if _tg_c_added:
+                            object.__setattr__(_turn_contract, "executable", _turn_contract.executable | _tg_c_added)
+                            object.__setattr__(_turn_contract, "offered", _turn_contract.offered | _tg_c_added)
+                            object.__setattr__(_turn_contract, "schema_json", _turn_contract.schema_json + tuple(
+                                _tg_json.dumps(s, sort_keys=True)
+                                for s in _contract_schemas
+                                if s.get("function", {}).get("name") in _tg_c_added
+                            ))
                     if _turn_contract is None:
                         _explicit_selected_tools = selected_tools_for_request(message)
                         if _explicit_selected_tools:
@@ -4709,6 +4776,26 @@ def setup_chat_routes(
                             _forced_tools = set(_explicit_selected_tools)
                     if _turn_contract is not None:
                         _forced_tools = set(_turn_contract.offered)
+                    # Fork: same force-include floor for every ticked
+                    # tool-group button, whatever RAG selection drops.
+                    # Placed AFTER the wholesale _forced_tools replacements
+                    # above (explicit-selection / turn-contract clobbers):
+                    # a tick is the user's word and must survive them,
+                    # exactly like the Documents force-include below.
+                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        _tg = {
+                            str(g).strip().lower()
+                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                            if str(g).strip().lower()
+                        }
+                        if allow_bash is not None and str(allow_bash).lower() == "true":
+                            _tg.add("bash")
+                        for _g in _tg:
+                            if _g in BUTTON_TOOLS:
+                                if _forced_tools is None:
+                                    _forced_tools = set()
+                                _forced_tools.update(BUTTON_TOOLS[_g])
                     # Ticked "Documents" toggle: doc tools are always
                     # available this turn, not only when the message
                     # happens to retrieve them (edit_document = "patch the
@@ -4718,6 +4805,31 @@ def setup_chat_routes(
                             _forced_tools = set()
                         _forced_tools.update(DOCUMENT_TOOL_NAMES)
 
+                    if os.environ.get("ODYSSEUS_TOOL_GROUPS", "").strip().lower() in {"1", "true", "yes"}:
+                        from src.agent_runtime.authority import BUTTON_TOOLS
+                        _tg_final_floor = set()
+                        for _g in {
+                            str(g).strip().lower()
+                            for g in str(form_data.get("tool_groups") or (body or {}).get("tool_groups") or "").split(",")
+                            if str(g).strip().lower()
+                        }:
+                            _tg_final_floor.update(BUTTON_TOOLS.get(_g, ()))
+                        tg_final_disabled = (disabled_tools or set()) - _tg_final_floor
+                        # The turn-contract path above REBUILT tool_policy
+                        # from the re-derived, un-floored set, so the policy
+                        # the bridge receives still disables ticked tools --
+                        # and the agent honors the policy, not the
+                        # disabled_tools kwarg. Rebuild the policy from the
+                        # floored set. NEW LOCAL again:
+                        # never rebind tool_policy inside stream_with_save
+                        # (same closure class as the 2026-10-18 incident).
+                        tg_final_policy = build_effective_tool_policy(
+                            disabled_tools=tg_final_disabled,
+                            last_user_message=message,
+                        )
+                    else:
+                        tg_final_disabled = disabled_tools
+                        tg_final_policy = tool_policy
                     async for chunk in _sse_keepalive(_stream_agent_with_execution_bridge(
                         _external_execution_bridge(client_runtime_context),
                         sess.endpoint_url,
@@ -4734,8 +4846,8 @@ def setup_chat_routes(
                         active_email=active_email_ctx,
                         session_id=session,
                         history_session=sess,
-                        disabled_tools=disabled_tools if disabled_tools else None,
-                        tool_policy=tool_policy,
+                        disabled_tools=tg_final_disabled if tg_final_disabled else None,
+                        tool_policy=tg_final_policy,
                         owner=_user,
                         fallbacks=_foreground_candidates[1:],
                         route_descriptors=_foreground_route_descriptors,

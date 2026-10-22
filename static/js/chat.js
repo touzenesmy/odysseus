@@ -2688,6 +2688,25 @@ import { invalidateSettings } from './appConfig.js';
 	      }
       fd.append('allow_bash', el('bash-toggle').checked ? 'true' : 'false');
       if (workspaceAgentIntent) fd.set('allow_bash', 'true');
+      // Tool groups (fork, Backlog #1): stamp every checked group; server
+      // (ODYSSEUS_TOOL_GROUPS gate) reads tool_groups for grants + the
+      // selection floor. bash/web reuse their existing checkbox state.
+      {
+        // Self-healing stamp: the visible button (active class) is the user's
+        // truth; the hidden checkbox is transport. If they desync, trust the
+        // button and re-sync.
+        const _tgPairs = [['bash','bash-toggle'],['web','web-toggle'],['sessions','sessions-toggle'],['media','media-toggle'],['browser','browser-toggle']];
+        const _tg = [];
+        for (const [g, id] of _tgPairs) {
+          const c = el(id);
+          const b = el(id.replace(/-toggle$/, '-toggle-btn'));
+          const cb = !!(c && c.checked);
+          const btn = !!(b && b.classList.contains('active'));
+          if (btn && c && !c.checked) c.checked = true;
+          if (cb || btn) _tg.push(g);
+        }
+        if (_tg.length) fd.append('tool_groups', _tg.join(','));
+      }
       fd.append('allow_documents', el('docs-toggle').checked ? 'true' : 'false');
       const ragChk = el('rag-toggle');
       if (ragChk && !ragChk.checked) {
