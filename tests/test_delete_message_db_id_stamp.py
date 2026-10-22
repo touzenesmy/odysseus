@@ -31,6 +31,15 @@ def _function_source(path, name):
     raise AssertionError(f"{name} not found in {path}")
 
 
+def _strip_tui_local_context():
+    """The real function from chat_helpers (it only needs `re`)."""
+    import re as _re
+    src = _function_source(ROOT / "routes" / "chat_helpers.py", "strip_tui_local_context")
+    ns: dict = {"re": _re, "Any": object}
+    exec(compile(ast.parse(src), str(ROOT / "routes" / "chat_helpers.py"), "exec"), ns)
+    return ns["strip_tui_local_context"]
+
+
 def _load_db_history_entry():
     """Exec the nested serializer with its real closure dependencies."""
     import re as _re
@@ -44,6 +53,10 @@ def _load_db_history_entry():
         "re": _re,
         "_HISTORY_INLINE_MEDIA_THRESHOLD": 200_000,
         "_DATA_IMAGE_RE": _re.compile(r"data:image/[^;,\"]+;base64,[A-Za-z0-9+/=\s]+"),
+        # routes/history_routes.py imports strip_tui_local_context from
+        # chat_helpers and applies it inside _db_history_entry (post-port:
+        # the new base added it upstream of our row-id work).
+        "strip_tui_local_context": _strip_tui_local_context(),
     }
     exec(compile(ast.parse(display_src), str(HIST), "exec"), ns)
     ns["_history_display_content"] = ns["_history_display_content"]
