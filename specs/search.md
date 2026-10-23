@@ -51,7 +51,7 @@ Runtime behavior:
 
 - disabled search returns disabled/unavailable text in the comprehensive path;
 - missing keyed-provider secrets return empty provider results instead of exposing secrets;
-- SearXNG retries through JSON variants before HTML fallback, pins English/general-engine defaults where needed, and maps news/recency settings into provider time filters;
+- SearXNG retries through JSON variants before HTML fallback, pins English/general-engine defaults where needed, and maps news/recency settings into provider time filters; an empty JSON response with a language pin retries unpinned, with a time range it retries without `time_range` (engines that cannot honour it return zero rows silently), and with a general-engine pin it retries unpinned, before the HTML fallback;
 - comprehensive search retries providers and then walks the fallback chain;
 - `/api/search/query` is a direct provider test/query path and does not use the comprehensive fallback chain. Direct provider result limits can be controlled dynamically by the caller.
 

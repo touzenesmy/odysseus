@@ -301,7 +301,21 @@ def searxng_search_api_meta(query: str, count: Optional[int] = None, categories:
                 query,
             )
             active_params = fallback
-            parsed, data = _run(active_params)
+            parsed, data = _run(fallback)
+        if not parsed and active_params.get("time_range"):
+            # SearXNG time_range filtering is engine-dependent: engines that
+            # can't honour it return zero rows instead of unfiltered results
+            # (silent, no unresponsive marker). Drop the constraint before
+            # reporting empty so fresh-news queries ("latest X CVE") don't
+            # fail wholesale on time-filter-agnostic engines.
+            fallback = dict(active_params)
+            fallback.pop("time_range", None)
+            logger.info(
+                "SearXNG time-ranged search returned 0 results for %r; retrying without time_range",
+                query,
+            )
+            active_params = fallback
+            parsed, data = _run(fallback)
         if not parsed and active_params.get("engines"):
             fallback = dict(active_params)
             fallback.pop("engines", None)

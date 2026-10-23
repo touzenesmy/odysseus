@@ -80,10 +80,38 @@ def test_provider_keeps_news_date_window_across_empty_fallbacks(monkeypatch):
     monkeypatch.setattr(providers, '_get_search_settings', lambda: {})
     monkeypatch.setattr(providers.httpx, 'get', get)
     providers.searxng_search_api('AI news today', time_filter='day')
-    assert len(calls) >= 2
+    assert len(calls) >= 5
     assert calls[0]['categories'] == 'news'
     assert calls[1]['categories'] == 'general'
-    assert all(call['time_range'] == 'day' for call in calls)
+    # The date window is preserved across the news→general and language
+    # fallbacks; only the time_range drop and the final engines drop run
+    # after it — SearXNG engines that can't honour time_range return zero
+    # rows silently, so the constraint is lifted before reporting empty.
+    assert all(call.get('time_range') == 'day' for call in calls[:3])
+    assert 'time_range' not in calls[-2]
+    assert 'time_range' not in calls[-1]
+
+
+def test_provider_drops_time_range_before_reporting_empty(monkeypatch):
+    from services.search import providers
+    calls = []
+    class Response:
+        def __init__(self, results):
+            self._results = results
+        def raise_for_status(self): pass
+        def json(self): return {'results': self._results}
+    def get(url, **kwargs):
+        calls.append(dict(kwargs['params']))
+        if 'time_range' in kwargs['params']:
+            return Response([])
+        return Response([{'title': 'PHP advisory', 'url': 'https://example.org', 'content': 'advisory'}])
+    monkeypatch.setattr(providers, '_get_search_instance', lambda: 'http://searx.test')
+    monkeypatch.setattr(providers, '_get_search_settings', lambda: {})
+    monkeypatch.setattr(providers.httpx, 'get', get)
+    results = providers.searxng_search_api('PHP vulnerability CVE', time_filter='month')
+    assert calls and all('time_range' in c for c in calls[:-1])
+    assert 'time_range' not in calls[-1]
+    assert results and results[0]['url'] == 'https://example.org'
 
 
 @pytest.mark.parametrize('arguments,expected', [
