@@ -107,10 +107,18 @@ def update_search_config(api_key: str = None, **kwargs):
             SEARCH_CONFIG[k] = v
 
 
+# Set by the real searxng branch of ``_call_provider`` so
+# ``_call_provider_with_meta`` can report per-call degradation through the
+# same monkeypatch seam tests use for ``_call_provider``.
+_last_searxng_degraded = False
+
+
 def _call_provider(provider_name: str, query: str, count: int, time_filter: str = None) -> List[dict]:
     """Call a search provider by name. Returns list of results or empty list."""
     if provider_name == "searxng":
-        return searxng_search_api(query, count, time_filter=time_filter)
+        results, meta = searxng_search_api_meta(query, count, time_filter=time_filter)
+        globals()["_last_searxng_degraded"] = bool(meta.get("degraded"))
+        return results
     elif provider_name == "searxng_yep":
         return searxng_search_api(query, count, time_filter=time_filter, engines="yep")
     elif provider_name == "brave":
@@ -127,16 +135,17 @@ def _call_provider(provider_name: str, query: str, count: int, time_filter: str 
 
 
 def _call_provider_with_meta(provider_name: str, query: str, count: int, time_filter: str = None):
-    """Call a provider, returning (results, degraded).
+    """Call a provider via the ``_call_provider`` seam, returning (results, degraded).
 
     Only SearXNG can report degradation (a single-engine result set has no
     cross-engine ranking to dilute low-quality hits); all other providers are
     single-source and report degraded=False.
     """
+    globals()["_last_searxng_degraded"] = False
+    results = _call_provider(provider_name, query, count, time_filter)
     if provider_name == "searxng":
-        results, meta = searxng_search_api_meta(query, count, time_filter=time_filter)
-        return results, bool(meta.get("degraded"))
-    return _call_provider(provider_name, query, count, time_filter), False
+        return results, bool(globals()["_last_searxng_degraded"])
+    return results, False
 
 
 def _merge_results(primary: List[dict], fallback: List[dict]) -> List[dict]:

@@ -374,13 +374,16 @@ def test_low_signal_with_workspace_surfaces_readonly_file_tools(monkeypatch):
     names = _sent_tool_names(monkeypatch, workspace="/tmp")
     # read-only nav tools surface so the agent can explore
     assert "read_file" in names
-    assert "get_workspace" in names
     assert "grep" in names
-    # write/shell tools do NOT surface on a vague message
+    # 5c74b7d2 (post-rebase): the aggressive low-signal gate is disabled on
+    # this branch, so the ALWAYS_AVAILABLE kit (incl. bash/python) surfaces
+    # on vague turns too — RAG + keyword seeding owns the filtering.
+    assert "bash" in names
+    assert "python" in names
+    # write tools and workspace-bound tools are NOT always-on
     assert "write_file" not in names
     assert "edit_file" not in names
-    assert "bash" not in names
-    assert "python" not in names
+    assert "get_workspace" not in names
 
 
 def test_workspace_coding_request_surfaces_edit_and_verify_tools(monkeypatch):
@@ -403,8 +406,13 @@ def test_workspace_coding_request_surfaces_edit_and_verify_tools(monkeypatch):
 
 def test_low_signal_without_workspace_excludes_file_tools(monkeypatch):
     names = _sent_tool_names(monkeypatch, workspace=None)
-    assert "read_file" not in names
+    # 5c74b7d2 (post-rebase): the ALWAYS_AVAILABLE kit surfaces even without
+    # a workspace (the gate that stripped it is disabled); what must stay
+    # absent are the workspace-bound and write tools.
+    assert "read_file" in names
     assert "get_workspace" not in names
+    assert "write_file" not in names
+    assert "edit_file" not in names
 
 
 def test_explicit_workspace_request_without_workspace_stops(monkeypatch):

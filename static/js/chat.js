@@ -7049,32 +7049,6 @@ import { invalidateSettings } from './appConfig.js';
       });
     });
 
-    // Abort a locally-frozen stream with the given reason (recovery paths
-    // that confirmed the run is dead server-side).
-    function _abortFrozenLocalStream(active, reason) {
-      console.warn('[tab-recovery] Stream confirmed dead. Aborting and reloading session.');
-      if (active && active.abortCtrl) {
-        active.abortCtrl._reason = reason;
-        active.abortCtrl.abort();
-      }
-      try {
-        const sid = sessionModule && sessionModule.getCurrentSessionId && sessionModule.getCurrentSessionId();
-        if (sid) _activeStreams.delete(sid);
-      } catch (_) {}
-      _syncForegroundStreamGlobals();
-
-      // Release Web Lock
-      if (_webLockRelease) {
-        _webLockRelease();
-        _webLockRelease = null;
-      }
-
-      // Reset UI state
-      var _submitBtn = document.getElementById('submit');
-      updateSubmitButton('idle', _submitBtn);
-      var _msgInput = document.getElementById('message');
-      if (_msgInput) _msgInput.disabled = false;
-    }
 
     // On mobile, fade out welcome text when keyboard opens to prevent overlap
     if (window.innerWidth <= 768) {

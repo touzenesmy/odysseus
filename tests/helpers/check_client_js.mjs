@@ -55,7 +55,7 @@ globalThis.addEventListener = () => {}; // window shim (voiceMode.js binds befor
 // is not possible in plain node, so instead we exec the source after
 // transforming the single import into a no-op).
 let src = readFileSync(new URL('../../static/js/voiceMode.js', import.meta.url), 'utf8');
-src = src.replace(/import\s*\{[^}]*\}\s*from\s*'\.\/ui\.js';/,
+src = src.replace(/import\s*\{[^}]*\}\s*from\s*'\.\/ui\.js(\?[^']*)?';/,
                   'const showToast = (m) => globalThis.__lastToast = m;');
 const mod = await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'));
 if (!globalThis.voiceModeModule) throw new Error('voiceModeModule not registered');
@@ -190,7 +190,7 @@ console.log('voiceMode phase3 OK');
 
 // ── TTS: extractPlainText must never hand thinking to the synthesizer ──
 let ttsSrc = readFileSync(new URL('../../static/js/tts-ai.js', import.meta.url), 'utf8');
-ttsSrc = ttsSrc.replace(/import\s*\{[^}]*\}\s*from\s*'\.\/appConfig\.js';/,
+ttsSrc = ttsSrc.replace(/import\s*\{[^}]*\}\s*from\s*'\.\/appConfig\.js(\?[^']*)?';/,
                         'const getSettings = async () => ({ tts_enabled: true });');
 const ttsMod = await import('data:text/javascript;base64,' + Buffer.from(ttsSrc).toString('base64'));
 const mgr = new ttsMod.AITTSManager();

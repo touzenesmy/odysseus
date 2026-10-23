@@ -10,7 +10,7 @@
 // The LLM conversation stays on /api/chat_stream — this module only owns
 // the audio edge: capture → WS → VAD → STT → composer.
 
-import { showToast } from './ui.js';
+import { showToast } from './ui.js?v=20260916largetoolscroll1';
 
 class VoiceModeModule {
   constructor() {
