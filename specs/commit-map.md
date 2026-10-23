@@ -156,6 +156,27 @@ per-commit classification).
 - `7b4ddb66` ← `ae57e6be d4925ca4 d76fe821 ce6aeb2f 2e3ba498 abd2713a 934b8366 8184bebf 1fe20ffc` (+static `7d028f48`, +tests `83185b20`) — ADAPTED route cluster: stamp + floor + forced-include + frozen-contract rewrite; strict_chat refs re-anchored (Chunk 3 feature, absent on new base); static lands at final state buster 20261020tg2; RE-VERIFY re-aim of the web-intent bash-guard source pin (multi-line condition on new base)
 - `79b3d3f8` — test(tool-groups): §C.2 dedicated matrix — tool-group grants × afecd44d approve-once (10 rows; NEW coverage, no Scaffold origin)
 
+## K. Strict chat mode (Chunk 3)
+
+- `12ca5a64` ← `4c966269` chat: strict chat mode — server-enforced conversation-only turns
+- `56b3768f` ← `03f7eb93` chat: strict mode fixes — phone override wins, pill position via existing CSS
+- `5b57419d` ← `670b4ca3` fix(chat): strict mode — guard remaining auto-escalations + enforce MCP-off end-to-end
+- `8081a7d7` ← `294ceaa4` fix(chat): honor ?strict_chat=1 in the send path (phone strict sessions were running as agent)
+- `6de51be2` ← `d10ad733` fix(strict): strict sends died silently — const isPlanMode (client) + missing strict_chat_disabled_tools import (server)
+- `b0779827` ← `87ab6200` fix(chat): phone Agent turns were pinned to strict chat by the send path
+- (Scaffold `6f267eb0` — fix(cache): index.html chat.js buster parity — landed as an **empty pick**: the new base's strict cluster already carried final-state busters, and the full 23-file parity set was bumped to `20261023parity1` in the P1 restore below.)
+
+## P1. Post-rebase restore (Chunk 3, ADAPTED onto the new base)
+
+- `84ccb03e` ← `d332e859` test: re-aim source guards at the restructured stream paths (post-rebase)
+- `6a01e352` ← `38c86045` fix(post-rebase): restore branch-specific behavior on the upstream rebuild (ADAPTED — models.py empty-turn keep, search _call_provider seam, agent_loop route_tools-None guard, 23-file buster parity → `20261023parity1`, dead-code drop, test re-aims)
+
+## P3. Completion streaming (Chunk 3)
+
+- `cda4db89` ← `f738b263` feat(completion): opt-out live answer streaming (ODYSSEUS_LIVE_ANSWER_STREAM)
+- `c5914a15` ← `15542d9f` feat(completion): ODYSSEUS_COMPLETION_GATE=0 bypasses the whole gate (replaces non-functional LIVE_ANSWER_STREAM flag; per-request read, upstream default unchanged)
+- `f27ca5c6` ← `9164b030` fix(completion): bypass rewrite keeps terminal bubble = streamed prose (transcript wall fix)
+
 ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 2908e02c d259efc3 ca3fda9e` (net-zero E2E diagnostic + its reverts; fixes re-landed as 2e3ba498 / 934b8366+8184bebf, which ARE ported above).
 
 ## Dev-only (no Scaffold origin)
@@ -166,3 +187,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `add86ba3` — fix(search): drop time_range before reporting empty — silent zero-row engines (post-smoke, dev-only; SearXNG time-range-agnostic engines return 0 rows)
 - `4532de56` — fix(voice): resume AudioContext on the mic-permission gesture path (post-smoke, dev-only; first-click-dead mic fix)
 - `ae12d8f7` — chore(static): bump voiceMode.js buster → 20261022micresume1 (cache invalidation for the voice fix)
+- `d722639f` — test(authority): scrub ODYSSEUS_COMPLETION_GATE in test_agent_runtime_context (hermetic; host env leaked the fork flag into upstream-pinned disclosure assertions — same class as bd3947cd)
