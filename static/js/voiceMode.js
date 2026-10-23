@@ -82,6 +82,29 @@ class VoiceModeModule {
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       ctx = new AC();
+      // Chrome suspends AudioContexts created after the mic-permission
+      // dialog: the first getUserMedia resolves once the user clicks
+      // Allow — outside any user-gesture window — so ctx.state stays
+      // 'suspended' and the worklet streams zero frames (first click
+      // "dead", second works). resume() is only honored inside the
+      // gesture continuation, so call it here, synchronously on that
+      // path, and gate on the 'running' transition before the worklet
+      // starts pushing frames.
+      if (ctx.state !== 'running') {
+        let resumePromise = null;
+        try {
+          if (typeof ctx.resume === 'function') resumePromise = ctx.resume();
+        } catch (_) { resumePromise = null; }
+        if (resumePromise && typeof resumePromise.then === 'function') {
+          await Promise.race([
+            resumePromise,
+            new Promise(resolve => setTimeout(resolve, 1500)),
+          ]);
+        }
+        if (ctx.state !== 'running') {
+          console.warn('AudioContext not running after resume (state=' + ctx.state + ')');
+        }
+      }
       await ctx.audioWorklet.addModule('/static/js/pcm16-processor.js');
       const source = ctx.createMediaStreamSource(this._stream);
       const worklet = new AudioWorkletNode(ctx, 'pcm16-processor');
