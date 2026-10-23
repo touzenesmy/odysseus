@@ -4,7 +4,18 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 import src.agent_loop as al
+
+
+@pytest.fixture(autouse=True)
+def _scrub_fork_env_vars(monkeypatch):
+    """Upstream's pinned assertions here encode fork-flag-OFF behavior (the completion
+    gate's terminal disclosure is one of them), so the fork opt-outs are scrubbed:
+    these tests always verify upstream defaults, even when the host env carries the
+    fork flags (hermetic-scrub convention, see test_completion_boundary)."""
+    monkeypatch.delenv("ODYSSEUS_COMPLETION_GATE", raising=False)
 
 
 def test_terminal_agent_gets_larger_failed_tool_recovery_window():
