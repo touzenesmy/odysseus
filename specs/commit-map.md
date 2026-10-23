@@ -163,3 +163,6 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `ab46aa94` docs(specs): ROADMAP moved to ImprovementsDev as the live port tracker (chunk 1 in progress)
 - `f3b1aea2` test: re-aim 3 source-pinned harnesses at the post-security base (chunk 1 RE-VERIFY; behavior unchanged)
 - `9bd70302` docs: chunk 1 complete on ImprovementsDev (346/346 gate green) + ROADMAP tracker + guide filename fix
+- `add86ba3` — fix(search): drop time_range before reporting empty — silent zero-row engines (post-smoke, dev-only; SearXNG time-range-agnostic engines return 0 rows)
+- `4532de56` — fix(voice): resume AudioContext on the mic-permission gesture path (post-smoke, dev-only; first-click-dead mic fix)
+- `ae12d8f7` — chore(static): bump voiceMode.js buster → 20261022micresume1 (cache invalidation for the voice fix)
