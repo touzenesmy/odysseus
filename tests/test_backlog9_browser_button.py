@@ -57,7 +57,7 @@ def test_browser_button_offers_raw_mcp_when_ticked() -> None:
 
 def test_browser_button_env_override_offers_raw_mcp(monkeypatch) -> None:
     from src.agent_loop import _build_system_prompt
-    monkeypatch.setenv("ODYSSEUS_BROWSER_MCP", "1")
+    monkeypatch.setenv("ODYSSEUS_EXPOSE_RAW_BROWSER_MCP", "1")
     _, schemas = _build_system_prompt(
         [{"role": "user", "content": "open https://example.com and take a screenshot"}],
         "gpt-5.5",
@@ -159,8 +159,8 @@ async def test_raw_mcp_browser_admitted_when_button_ticked(monkeypatch):
 
 
 async def test_env_override_admits_at_execution(monkeypatch):
-    """ODYSSEUS_BROWSER_MCP=1 is the global opt-in; the stamp is not required."""
-    monkeypatch.setenv("ODYSSEUS_BROWSER_MCP", "1")
+    """ODYSSEUS_EXPOSE_RAW_BROWSER_MCP=1 is the global opt-in; the stamp is not required."""
+    monkeypatch.setenv("ODYSSEUS_EXPOSE_RAW_BROWSER_MCP", "1")
     name = "mcp__builtin_browser__browser_snapshot"
 
     class _Session:
@@ -204,11 +204,11 @@ def _fake_identity(qualified):
 # -- helper semantics ------------------------------------------------------------
 
 def test_surface_allowed_reads_only_the_server_stamp(monkeypatch):
-    monkeypatch.delenv("ODYSSEUS_BROWSER_MCP", raising=False)
+    monkeypatch.delenv("ODYSSEUS_EXPOSE_RAW_BROWSER_MCP", raising=False)
     assert browser_mcp_raw_surface_allowed(None) is False
     assert browser_mcp_raw_surface_allowed({}) is False
     assert browser_mcp_raw_surface_allowed({"web_ui_state": {"browser_button": False}}) is False
     assert browser_mcp_raw_surface_allowed(TICKED_CTX) is True
-    monkeypatch.setenv("ODYSSEUS_BROWSER_MCP", "1")
+    monkeypatch.setenv("ODYSSEUS_EXPOSE_RAW_BROWSER_MCP", "1")
     assert browser_mcp_raw_surface_allowed(None) is True
     assert browser_mcp_raw_surface_allowed({"web_ui_state": {"browser_button": False}}) is True

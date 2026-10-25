@@ -21,7 +21,7 @@ described as a switch that turns something off, the read rejects `0`, `false`,
 `no` and `off` and treats everything else as on. The `Default` column is the
 value the code falls back to when the variable is unset, quoted from the source.
 
-The source tree reads **123** `ODYSSEUS_*` variables: 87 an operator may want to set, and 36 that are internal - sentinels, fixture switches, capture hooks and development tooling. The internal ones are listed too, in their own section, so this page can be checked against the source mechanically.
+The source tree reads **125** `ODYSSEUS_*` variables: 88 an operator may want to set, and 37 that are internal - sentinels, fixture switches, capture hooks and development tooling. The internal ones are listed too, in their own section, so this page can be checked against the source mechanically.
 
 > This page is generated. Edit `scripts/generate_env_reference.py` and
 > re-run it; `tests/test_env_reference.py` enforces that the committed page
@@ -80,7 +80,7 @@ The source tree reads **123** `ODYSSEUS_*` variables: 87 an operator may want to
 | `ODYSSEUS_MCP_ALLOWED_COMMANDS` | `''` | `src/agent_tools/admin_tools.py` | Security-relevant. Comma-separated allowlist of MCP launcher basenames the agent may start. Empty by default, and the deny list still wins. |
 | `ODYSSEUS_PYTHON_TOOL_SITE_PACKAGES` | `''` | `src/agent_runtime/process_resources.py` (+1 more) | Security-relevant. Absolute package roots, separated by the platform path separator, exposed to the sandboxed Python tool. Empty exposes none. |
 | `ODYSSEUS_SCRIPT_HOST` | `'localhost'` | `src/builtin_actions.py` | Default host for the run-script action. `localhost`, `127.0.0.1`, `local` and empty run locally; any other value runs over SSH. |
-| `ODYSSEUS_SHOW_THINKING` | *unset* | `src/agent_loop.py` | Fork opt-in: re-stream the model's private thinking deltas to the client on the Qwen 3.5/3.8 tool-router path, where upstream hides them by default. Internal accumulation is unchanged, so model continuation is unaffected. Off by default. |
+| `ODYSSEUS_SHOW_THINKING` | *unset* | `routes/chat_routes.py` (+1 more) | Fork opt-in: re-stream the model's private thinking deltas to the client on the Qwen 3.5/3.8 tool-router path, where upstream hides them by default. Internal accumulation is unchanged, so model continuation is unaffected. Off by default. |
 | `ODYSSEUS_TOOL_APPROVAL_GATE` | `'1'` | `src/tool_capabilities.py` | Security-relevant. On by default: after external content enters a run, tools that execute code, mutate state or cause external side effects need a separate approval. Set to 0 to opt out. |
 
 ### Browser automation
@@ -205,8 +205,9 @@ Listed for completeness. Setting one of these on a real install is either a no-o
 | Variable | Default | Read in | What it does |
 |---|---|---|---|
 | `ODYSSEUS_CAPTURE_MODEL_REQUESTS` | `''` | `src/agent_loop.py` | Truthy writes model-request snapshots for local debugging. The marker file `/tmp/odysseus_capture_model_requests` enables the same thing. |
-| `ODYSSEUS_EXPOSE_RAW_BROWSER_MCP` | `''` | `src/agent_loop.py` | Truthy stops hiding the raw Playwright MCP tools from agent prompts when the private-browser tool is available. |
+| `ODYSSEUS_EXPOSE_RAW_BROWSER_MCP` | `''` | `src/agent_loop.py` (+1 more) | Truthy opts the raw Playwright MCP surface in end to end: stops hiding the raw tools from agent prompts and admits raw MCP browser calls at execution (otherwise they are denied even when offered). The Browser button in the UI grants the same surface per turn without this variable. |
 | `ODYSSEUS_TOOL_CONTRACT_ROOT` | `str(Path(__file__).resolve().parents[1] / 'scripts')` | `src/clean_agent_preview.py` (+1 more) | Directory holding the tool-contract scripts the clean-agent preview loads. The default resolves to the bundled scripts directory relative to the installed/source tree. |
+| `ODYSSEUS_TOOL_GROUPS` | `''` | `routes/chat_routes.py` (+3 more) | Truthy enables the UI tool-group buttons (bash, files, web, browser, ...): a ticked group is a floor its tools are never stripped from the policy, and clients that send the key also get a ceiling disabling unticked groups. Off, the tool_groups wire key is ignored. |
 
 ### Email
 
@@ -272,7 +273,7 @@ reads three ways, because no single pattern covers the codebase:
   lines, so one read lives inside a string literal.
 
 The three passes are not redundancy. A line-based grep for a direct
-`os.environ.get("ODYSSEUS_...` call finds 91 of the 123 variables on this
+`os.environ.get("ODYSSEUS_...` call finds 93 of the 125 variables on this
 page. What it misses is reads through an env-reader helper, reads whose call
 spans more than one line, reads whose variable name is held in a module
 constant, and reads through a mapping passed in as an argument - which is the

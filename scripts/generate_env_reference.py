@@ -570,13 +570,22 @@ VARIABLE_NOTES: dict[str, tuple[str, str, str]] = {
     ),
     "ODYSSEUS_EXPOSE_RAW_BROWSER_MCP": (
         "Agent loop and tool execution", INTERNAL,
-        "Truthy stops hiding the raw Playwright MCP tools from agent prompts when "
-        "the private-browser tool is available.",
+        "Truthy opts the raw Playwright MCP surface in end to end: stops hiding "
+        "the raw tools from agent prompts and admits raw MCP browser calls at "
+        "execution (otherwise they are denied even when offered). The Browser "
+        "button in the UI grants the same surface per turn without this variable.",
     ),
     "ODYSSEUS_TOOL_CONTRACT_ROOT": (
         "Agent loop and tool execution", INTERNAL,
         "Directory holding the tool-contract scripts the clean-agent preview loads. "
         "The default resolves to the bundled scripts directory relative to the installed/source tree.",
+    ),
+    "ODYSSEUS_TOOL_GROUPS": (
+        "Agent loop and tool execution", INTERNAL,
+        "Truthy enables the UI tool-group buttons (bash, files, web, browser, ...): "
+        "a ticked group is a floor its tools are never stripped from the policy, "
+        "and clients that send the key also get a ceiling disabling unticked groups. "
+        "Off, the tool_groups wire key is ignored.",
     ),
 
     # -- Browser automation -------------------------------------------------

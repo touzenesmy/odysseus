@@ -66,11 +66,14 @@ def browser_mcp_raw_surface_allowed(client_runtime_context=None) -> bool:
     True when the user ticked the Browser button for this turn (the route
     stamps web_ui_state["browser_button"] from the server-side effective
     policy -- the client's raw value never reaches this point) or the
-    global ODYSSEUS_BROWSER_MCP opt-in is set. Upstream default (neither):
+    global ODYSSEUS_EXPOSE_RAW_BROWSER_MCP opt-in is set -- the same
+    documented variable the offer-side hide rule already honors, so the
+    opt-in is end to end (offered, granted, admitted). Upstream default
+    (neither):
     the raw MCP stays hidden behind the private_browser wrapper in prompts
     and is denied at execution -- byte-identical to pre-fork behavior.
     """
-    if os.getenv("ODYSSEUS_BROWSER_MCP", "").strip().lower() in {"1", "true", "yes"}:
+    if os.getenv("ODYSSEUS_EXPOSE_RAW_BROWSER_MCP", "").strip().lower() in {"1", "true", "yes"}:
         return True
     state = (client_runtime_context or {}).get("web_ui_state") or {}
     return bool(state.get("browser_button"))
