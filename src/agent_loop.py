@@ -26538,24 +26538,43 @@ async def stream_agent_loop(
                     _preemptive_result if isinstance(_preemptive_result, dict) else {},
                     _preemptive_calendar_content,
                 )
-                _preemptive_summary = ""
-                if not (isinstance(_preemptive_result, dict) and _preemptive_result.get("error")):
-                    _preemptive_summary = _calendar_list_summary_from_tool_output(
-                        _preemptive_output,
-                        include_details=_calendar_detail_requested(_last_user),
-                        user_text=_last_user,
+                # Fork (Backlog #8, same leak as the explicit-admin tail): a
+                # BLOCKED pre-executed calendar call must not be emitted as the
+                # assistant reply. The tool_output frame above keeps the attempt
+                # in the trace; the normal model round proceeds instead.
+                _preemptive_calendar_hard_blocked = isinstance(_preemptive_result, dict) and (
+                    _preemptive_result.get("blocked") is True
+                    or _preemptive_result.get("failure_kind") in {
+                        "request_authority_denied",
+                        "resource_identity_denied",
+                        "turn_contract_denied",
+                    }
+                )
+                if _preemptive_calendar_hard_blocked:
+                    logger.info(
+                        "[agent] preemptive calendar %s blocked (%s); deferring to model round",
+                        _preemptive_calendar_tool,
+                        _preemptive_result.get("failure_kind") or "blocked",
                     )
-                full_response = _preemptive_summary or _preemptive_output.strip() or "No calendar events found."
-                round_response = full_response
-                round_texts.append(full_response)
-                round_models.append(_round_actual_model)
-                round_endpoint_ids.append(_round_actual_endpoint_id)
-                round_endpoint_labels.append(_round_actual_endpoint_label)
-                yield f'data: {json.dumps({"type": "final_response", "content": full_response})}\n\n'
-                _preemptive_calendar_final_emitted = True
-                _finalize_round_usage()
-                logger.info("[agent] completed preemptive calendar lookup")
-                break
+                else:
+                    _preemptive_summary = ""
+                    if not (isinstance(_preemptive_result, dict) and _preemptive_result.get("error")):
+                        _preemptive_summary = _calendar_list_summary_from_tool_output(
+                            _preemptive_output,
+                            include_details=_calendar_detail_requested(_last_user),
+                            user_text=_last_user,
+                        )
+                    full_response = _preemptive_summary or _preemptive_output.strip() or "No calendar events found."
+                    round_response = full_response
+                    round_texts.append(full_response)
+                    round_models.append(_round_actual_model)
+                    round_endpoint_ids.append(_round_actual_endpoint_id)
+                    round_endpoint_labels.append(_round_actual_endpoint_label)
+                    yield f'data: {json.dumps({"type": "final_response", "content": full_response})}\n\n'
+                    _preemptive_calendar_final_emitted = True
+                    _finalize_round_usage()
+                    logger.info("[agent] completed preemptive calendar lookup")
+                    break
         if (
             round_num == 1
             and not guide_only
