@@ -64,7 +64,7 @@ from src.tool_security import (
     email_tool_policy_names,
     plan_mode_disabled_tools,
 )
-from src.tool_policy import GUIDE_ONLY_DIRECTIVE, WEB_TOOL_NAMES, ToolPolicy, known_tool_names
+from src.tool_policy import GUIDE_ONLY_DIRECTIVE, WEB_TOOL_NAMES, ToolPolicy, browser_mcp_raw_surface_allowed, known_tool_names
 from src.client_tool_contract import TUI_CLIENT_TOOL_NAMES
 from src.tool_capabilities import (
     ResultIntegrity,
@@ -4303,6 +4303,7 @@ def _expand_browser_mcp_tools(
     tool_names: Set[str],
     mcp_mgr,
     disabled_tools: Optional[Set[str]] = None,
+    client_runtime_context: Optional[Dict[str, Any]] = None,
 ) -> Set[str]:
     """Expand browser intent to every connected Playwright MCP tool.
 
@@ -4312,7 +4313,7 @@ def _expand_browser_mcp_tools(
     MCP server actually exposed.
     """
     names = set(tool_names or set())
-    if _should_hide_raw_browser_mcp(disabled_tools):
+    if _should_hide_raw_browser_mcp(disabled_tools, client_runtime_context):
         names.discard("builtin_browser")
         names = {name for name in names if not str(name).startswith(_BROWSER_MCP_PREFIX)}
         return names
@@ -4331,9 +4332,17 @@ def _expand_browser_mcp_tools(
     return names
 
 
-def _should_hide_raw_browser_mcp(disabled_tools: Optional[Set[str]] = None) -> bool:
+def _should_hide_raw_browser_mcp(
+    disabled_tools: Optional[Set[str]] = None,
+    client_runtime_context: Optional[Dict[str, Any]] = None,
+) -> bool:
     """Hide raw Playwright MCP from agent prompts when private_browser is usable."""
     if os.getenv("ODYSSEUS_EXPOSE_RAW_BROWSER_MCP", "").strip().lower() in {"1", "true", "yes"}:
+        return False
+    # Fork (Backlog #9): a ticked Browser button (or the global opt-in) owns
+    # the raw Playwright surface for this turn, so the wrapper-era hide rule
+    # must not strip it. Gate-OFF default (no stamp, no env): unchanged.
+    if browser_mcp_raw_surface_allowed(client_runtime_context):
         return False
     return "private_browser" not in set(disabled_tools or set())
 
@@ -4342,6 +4351,7 @@ def _with_raw_browser_mcp_hidden(
     mcp_mgr,
     mcp_disabled_map: Optional[Dict[str, set]],
     disabled_tools: Optional[Set[str]] = None,
+    client_runtime_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, set]:
     """Return an MCP disabled map that hides builtin Playwright browser tools.
 
@@ -4353,7 +4363,7 @@ def _with_raw_browser_mcp_hidden(
         str(server_id): set(names or set())
         for server_id, names in (mcp_disabled_map or {}).items()
     }
-    if not mcp_mgr or not _should_hide_raw_browser_mcp(disabled_tools):
+    if not mcp_mgr or not _should_hide_raw_browser_mcp(disabled_tools, client_runtime_context):
         return effective
     try:
         for tool in mcp_mgr.get_all_tools(mcp_disabled_map or {}):
@@ -4369,8 +4379,9 @@ def _with_raw_browser_mcp_hidden(
 def _filter_raw_browser_mcp_schemas(
     schemas: List[Dict[str, Any]],
     disabled_tools: Optional[Set[str]] = None,
+    client_runtime_context: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    if not _should_hide_raw_browser_mcp(disabled_tools):
+    if not _should_hide_raw_browser_mcp(disabled_tools, client_runtime_context):
         return list(schemas or [])
     return [
         schema for schema in (schemas or [])
@@ -14549,12 +14560,14 @@ def _build_system_prompt(
         mcp_mgr,
         mcp_disabled_map,
         disabled_tools,
+        client_runtime_context,
     )
     mcp_schemas = []
     if mcp_mgr:
         mcp_schemas = _filter_raw_browser_mcp_schemas(
             mcp_mgr.get_all_openai_schemas(_effective_mcp_disabled_map),
             disabled_tools,
+            client_runtime_context,
         )
 
     set_active_model(model)
@@ -22692,7 +22705,7 @@ async def stream_agent_loop(
                     "[agent-intent] preferred private_browser over raw browser tools=%s",
                     sorted(_browser_tools),
                 )
-        _relevant_tools = _expand_browser_mcp_tools(_relevant_tools, mcp_mgr, disabled_tools)
+        _relevant_tools = _expand_browser_mcp_tools(_relevant_tools, mcp_mgr, disabled_tools, client_runtime_context)
 
     # The skill index injected by _build_system_prompt tells the model to
     # call `manage_skills action=view`, and Jaccard-matched skills are pasted

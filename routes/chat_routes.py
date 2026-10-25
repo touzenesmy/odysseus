@@ -78,6 +78,7 @@ from routes.chat_helpers import (
 from src.action_intents import ToolIntent, classify_tool_intent as _classify_tool_intent
 from src.image_model_ids import looks_like_image_generation_model
 from src.tool_policy import (
+    BROWSER_MCP_TOOLS,
     WEB_ACCESS_TOOL_NAMES,
     WEB_TOOL_NAMES,
     build_effective_tool_policy,
@@ -1570,20 +1571,10 @@ _BROWSER_STATE_FOLLOWUP_RE = re.compile(
     r"\b(?:this|that|the|current|same)\s+(?:page|site|tab)\b",
     re.I,
 )
-_BROWSER_MCP_TOOLS = {
-    "mcp__builtin_browser__browser_navigate",
-    "mcp__builtin_browser__browser_snapshot",
-    "mcp__builtin_browser__browser_click",
-    "mcp__builtin_browser__browser_type",
-    "mcp__builtin_browser__browser_fill_form",
-    "mcp__builtin_browser__browser_select_option",
-    "mcp__builtin_browser__browser_press_key",
-    "mcp__builtin_browser__browser_wait_for",
-    "mcp__builtin_browser__browser_take_screenshot",
-    "mcp__builtin_browser__browser_drag",
-    "mcp__builtin_browser__browser_navigate_back",
-    "mcp__builtin_browser__browser_close",
-}
+# Fork (Backlog #9): alias to the single source of truth (tool_policy) --
+# the full built-in Playwright MCP wire-name surface, shared with the
+# authority grant (BUTTON_TOOLS["browser"]) and the execution gate.
+_BROWSER_MCP_TOOLS = set(BROWSER_MCP_TOOLS)
 
 
 def _recent_session_text(sess, limit: int = 8, max_chars: int = 2000) -> str:
@@ -3707,6 +3698,10 @@ def setup_chat_routes(
                 "sessions": "list_sessions" not in disabled_tools,
                 "media": "inspect_media" not in disabled_tools,
                 "browser": "private_browser" not in disabled_tools,
+                # Fork (Backlog #9): server-side tick signal for the Browser
+                # button (the raw client value is never trusted downstream).
+                # Drives the raw-Playwright offer + execution exemption.
+                "browser_button": "browser" in _tool_groups_on,
             })
         # Capture permission state before schema selection/reconciliation.
         # Only deterministic request intent supplies grants, never inventory.

@@ -18,7 +18,7 @@ from src.agent_runtime.resources import (
     BrowserSessionResource, BrowserPageResource,
     backend_from_dict, intersect_roots, seal_owned_scopes,
 )
-from src.tool_policy import ToolPolicy, build_effective_tool_policy
+from src.tool_policy import BROWSER_MCP_TOOLS, ToolPolicy, build_effective_tool_policy
 from src.turn_contract import (
     FAMILY_TOOLS, canonical_tool, requested_capabilities,
     RequiredReadOperation, required_read_operation_for_request, selected_tools_for_request,
@@ -371,15 +371,17 @@ def interpret_request(request_text, *, history=(), workspace=None, active_docume
 # disabled_tools so RAG can never strip them). The `bash` entry mirrors the
 # pre-existing hardcoded bash-button grant in create_request_authority (kept
 # verbatim so gate-OFF stays byte-identical); it is listed here so the floor and
-# the UI stay uniform across all five groups. `browser` uses the canonical
-# `private_browser` name; the MCP wire names (mcp__builtin_browser__*) are
-# resolved in the chat_routes floor.
+# the UI stay uniform across all five groups. `browser` grants the native
+# `private_browser` wrapper (session metadata) PLUS the built-in Playwright MCP
+# family (BROWSER_MCP_TOOLS, tool_policy) -- the real page actions live in the
+# MCP surface; the wrapper alone is metadata-only, which is why a ticked button
+# used to grant a tool nothing could execute.
 BUTTON_TOOLS = {
     "bash": ("bash", "read_file", "write_file", "edit_file", "apply_patch", "glob", "grep"),
     "sessions": ("list_sessions", "search_chats", "create_session", "manage_session", "send_to_session"),
     "web": ("web_search", "web_fetch"),
     "media": ("inspect_media", "transcribe_media", "extract_text"),
-    "browser": ("private_browser",),
+    "browser": ("private_browser",) + tuple(sorted(BROWSER_MCP_TOOLS)),
 }
 
 

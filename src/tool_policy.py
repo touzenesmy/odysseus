@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -22,6 +23,57 @@ WEB_ACCESS_TOOL_NAMES = frozenset({
     "private_browser",
     "youtube_tool",
 })
+
+# Fork (Backlog #9): the built-in Playwright MCP surface, by the exact
+# qualified wire names the MCP manager exposes (server_id "builtin_browser").
+# Single source of truth for (a) the route's disabled/ceiling sets,
+# (b) BUTTON_TOOLS["browser"] (the Browser button owns this family), and
+# (c) the raw-MCP execution gate in tool_execution.py (which keeps its own
+# inline copy of this same set -- keep the two in lockstep). The names are the
+# full @playwright/mcp surface the built-in server exposes (matches the
+# upstream guard set at tool_execution.py); add new tools here as the server
+# gains them.
+BROWSER_MCP_TOOLS = frozenset({
+    "mcp__builtin_browser__browser_click",
+    "mcp__builtin_browser__browser_fill_form",
+    "mcp__builtin_browser__browser_type",
+    "mcp__builtin_browser__browser_press_key",
+    "mcp__builtin_browser__browser_evaluate",
+    "mcp__builtin_browser__browser_navigate",
+    "mcp__builtin_browser__browser_navigate_back",
+    "mcp__builtin_browser__browser_snapshot",
+    "mcp__builtin_browser__browser_take_screenshot",
+    "mcp__builtin_browser__browser_wait_for",
+    "mcp__builtin_browser__browser_tabs",
+    "mcp__builtin_browser__browser_close",
+    "mcp__builtin_browser__browser_run_code",
+    "mcp__builtin_browser__browser_network_requests",
+    "mcp__builtin_browser__browser_console_messages",
+    "mcp__builtin_browser__browser_drag",
+    "mcp__builtin_browser__browser_hover",
+    "mcp__builtin_browser__browser_select_option",
+    "mcp__builtin_browser__browser_file_upload",
+    "mcp__builtin_browser__browser_handle_dialog",
+    "mcp__builtin_browser__browser_resize",
+    "mcp__builtin_browser__browser_install",
+})
+
+
+def browser_mcp_raw_surface_allowed(client_runtime_context=None) -> bool:
+    """Fork (Backlog #9): when the raw Playwright MCP surface is offered to
+    the model AND admissible at execution for this request.
+
+    True when the user ticked the Browser button for this turn (the route
+    stamps web_ui_state["browser_button"] from the server-side effective
+    policy -- the client's raw value never reaches this point) or the
+    global ODYSSEUS_BROWSER_MCP opt-in is set. Upstream default (neither):
+    the raw MCP stays hidden behind the private_browser wrapper in prompts
+    and is denied at execution -- byte-identical to pre-fork behavior.
+    """
+    if os.getenv("ODYSSEUS_BROWSER_MCP", "").strip().lower() in {"1", "true", "yes"}:
+        return True
+    state = (client_runtime_context or {}).get("web_ui_state") or {}
+    return bool(state.get("browser_button"))
 
 
 # ── Strict chat (conversation-only) mode ─────────────────────────

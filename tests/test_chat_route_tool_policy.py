@@ -229,7 +229,7 @@ def test_agent_loop_expands_browser_mcp_tools_from_connected_server():
     source = (Path(__file__).resolve().parent.parent / "src" / "agent_loop.py").read_text(encoding="utf-8")
     assert "def _expand_browser_mcp_tools" in source
     assert "server_id\") == \"builtin_browser\"" in source
-    assert "_relevant_tools = _expand_browser_mcp_tools(_relevant_tools, mcp_mgr, disabled_tools)" in source
+    assert "_relevant_tools = _expand_browser_mcp_tools(_relevant_tools, mcp_mgr, disabled_tools, client_runtime_context)" in source
 
 
 def test_disabled_tools_respects_missing_vs_explicit_toggles():

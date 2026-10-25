@@ -34,9 +34,15 @@ def _tick_tools(*groups: str) -> set[str]:
 
 def test_contract_tick_wins_mutation_on_real_frozen_class():
     """Run the exact mutation the route performs, on the real class."""
+    from src.tool_policy import BROWSER_MCP_TOOLS
     ticked = _tick_tools("sessions", "browser")
-    assert ticked == {"list_sessions", "search_chats", "create_session",
-                      "manage_session", "send_to_session", "private_browser"}
+    # Fork (Backlog #9): the ticked browser button owns the full raw
+    # Playwright MCP surface, not just the metadata-only wrapper.
+    assert ticked == (
+        {"list_sessions", "search_chats", "create_session",
+         "manage_session", "send_to_session", "private_browser"}
+        | set(BROWSER_MCP_TOOLS)
+    )
     contract = object.__new__(TurnContract)  # frozen dataclass: bypass ctor
     object.__setattr__(contract, "capabilities", frozenset())
     object.__setattr__(contract, "required", frozenset())

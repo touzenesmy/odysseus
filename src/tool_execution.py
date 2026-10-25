@@ -33,7 +33,7 @@ from src.tool_security import (
 )
 from src.tool_capabilities import ToolRunSecurityContext, blocked_tool_result
 from src.tool_approvals import ExactToolApproval
-from src.tool_policy import ToolPolicy
+from src.tool_policy import ToolPolicy, browser_mcp_raw_surface_allowed
 from src.client_tool_contract import TUI_ROUTED_BRIDGE_TOOL_NAMES
 from src.constants import (
     DATA_DIR,
@@ -1720,12 +1720,22 @@ async def execute_tool_block(
             return f"{transport}: UNSUPPORTED", page_unavailable()
     # Raw global Playwright MCP has no authoritative session/page observation.
     # Its transport process and remote backend identity cannot substitute for it.
-    if transport.startswith("mcp__") and transport.rsplit("__", 1)[-1] in {
-        "browser_click", "browser_fill_form", "browser_type", "browser_press_key", "browser_evaluate",
-        "browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_take_screenshot",
-        "browser_wait_for", "browser_tabs", "browser_close", "browser_run_code", "browser_network_requests",
-        "browser_console_messages", "browser_drag", "browser_hover", "browser_select_option",
-        "browser_file_upload", "browser_handle_dialog", "browser_resize", "browser_install"}:
+    # Fork (Backlog #9): the exemption is flag-gated, not name-gated. A
+    # ticked Browser button (or the global opt-in) admits the family at the
+    # route + authority layer, and the tick-wins ceiling keeps it disabled for
+    # unticked clients; any request reaching this gate with the name admitted
+    # is therefore user-sanctioned. Upstream default (no stamp, no env):
+    # identical denial below.
+    if (
+        not browser_mcp_raw_surface_allowed(client_runtime_context)
+        and transport.startswith("mcp__")
+        and transport.rsplit("__", 1)[-1] in {
+            "browser_click", "browser_fill_form", "browser_type", "browser_press_key", "browser_evaluate",
+            "browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_take_screenshot",
+            "browser_wait_for", "browser_tabs", "browser_close", "browser_run_code", "browser_network_requests",
+            "browser_console_messages", "browser_drag", "browser_hover", "browser_select_option",
+            "browser_file_upload", "browser_handle_dialog", "browser_resize", "browser_install"}
+    ):
         return f"{transport}: UNSUPPORTED", page_unavailable()
     try:
         pending = exact_approval.pending if exact_approval is not None else None
