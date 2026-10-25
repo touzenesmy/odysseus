@@ -195,5 +195,8 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `a85f09b0` — docs(specs): commit-map — backfill 3 unmapped docs commits (ae2b6030, 0a9dc2e0, 3ee615e7) to restore the ahead=entries+1 invariant
 - `043a686e` — fix(agent): blocked preemptive explicit tool call no longer becomes the reply (Backlog #8)
 - `d989636d` — feat(browser): ticked Browser button owns the raw Playwright MCP surface (Backlog #9)
+- `03e0a612` — docs(specs): ROADMAP #8/#9 fixed status + commit-map backfill (4 rows: 7cb56aa6, a85f09b0, 043a686e, d989636d)
 - `9f20f505` — feat(browser): execution-side raw-MCP opt-in reuses ODYSSEUS_EXPOSE_RAW_BROWSER_MCP (Backlog #9; aligns the two opt-in vars to one)
+- `874ef867` — docs(specs): commit-map — 9f20f505 (execution-side opt-in var alignment)
 - `94edfa88` — fix(agent): preemptive calendar lookup blocked by an execution gate defers to the model round (Backlog #8; same leak, second branch)
+- `23351ef4` — docs(specs): ROADMAP #8/#9 COMPLETE status (calendar tail 94edfa88, env alignment 9f20f505) + commit-map rows
