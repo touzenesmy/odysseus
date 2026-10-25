@@ -196,3 +196,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `043a686e` — fix(agent): blocked preemptive explicit tool call no longer becomes the reply (Backlog #8)
 - `d989636d` — feat(browser): ticked Browser button owns the raw Playwright MCP surface (Backlog #9)
 - `9f20f505` — feat(browser): execution-side raw-MCP opt-in reuses ODYSSEUS_EXPOSE_RAW_BROWSER_MCP (Backlog #9; aligns the two opt-in vars to one)
+- `94edfa88` — fix(agent): preemptive calendar lookup blocked by an execution gate defers to the model round (Backlog #8; same leak, second branch)
