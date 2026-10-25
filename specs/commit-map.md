@@ -191,3 +191,7 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `0a9dc2e0` docs(specs): ROADMAP + commit-map — post-smoke search/voice fixes (add86ba3, 4532de56, ae12d8f7)
 - `3ee615e7` docs(specs): ROADMAP — upstream/dev rewritten (7 behind incl. incident-CA TLS series); deploy safe (update.sh no-rebase)
 - `d722639f` — test(authority): scrub ODYSSEUS_COMPLETION_GATE in test_agent_runtime_context (hermetic; host env leaked the fork flag into upstream-pinned disclosure assertions — same class as bd3947cd)
+- `7cb56aa6` — docs(specs): commit-map + ROADMAP — Chunk 3 complete (strict 7 + P1 2 + P3 3 code + hermetic scrub; 1609 green)
+- `a85f09b0` — docs(specs): commit-map — backfill 3 unmapped docs commits (ae2b6030, 0a9dc2e0, 3ee615e7) to restore the ahead=entries+1 invariant
+- `043a686e` — fix(agent): blocked preemptive explicit tool call no longer becomes the reply (Backlog #8)
+- `d989636d` — feat(browser): ticked Browser button owns the raw Playwright MCP surface (Backlog #9)
