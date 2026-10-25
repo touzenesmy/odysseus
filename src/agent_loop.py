@@ -26865,20 +26865,42 @@ async def stream_agent_loop(
                         _topic_bulk_preemptive_request.get("action"),
                     )
                     break
-                full_response = _summary_for_preemptive_admin_session_tool(
-                    _preemptive_tool,
-                    _preemptive_content,
-                    _preemptive_result,
-                    _preemptive_output,
+                # Fork (Backlog #8): a pre-executed tool that the request
+                # authority (or any hard execution gate) BLOCKED must not be
+                # emitted as the assistant reply -- the raw denial string is a
+                # server error, not an answer, and breaking here starved the
+                # model round that could actually address the user's question.
+                # Drop the preemptive result (the attempt stays in the tool
+                # trace above) and let the normal model round proceed.
+                _preemptive_hard_blocked = isinstance(_preemptive_result, dict) and (
+                    _preemptive_result.get("blocked") is True
+                    or _preemptive_result.get("failure_kind") in {
+                        "request_authority_denied",
+                        "resource_identity_denied",
+                        "turn_contract_denied",
+                    }
                 )
-                round_response = full_response
-                round_texts.append(full_response)
-                round_models.append(_round_actual_model)
-                round_endpoint_ids.append(_round_actual_endpoint_id)
-                round_endpoint_labels.append(_round_actual_endpoint_label)
-                _finalize_round_usage()
-                logger.info("[agent] completed preemptive explicit %s", _preemptive_tool)
-                break
+                if _preemptive_hard_blocked:
+                    logger.info(
+                        "[agent] preemptive explicit %s blocked (%s); deferring to model round",
+                        _preemptive_tool,
+                        _preemptive_result.get("failure_kind") or "blocked",
+                    )
+                else:
+                    full_response = _summary_for_preemptive_admin_session_tool(
+                        _preemptive_tool,
+                        _preemptive_content,
+                        _preemptive_result,
+                        _preemptive_output,
+                    )
+                    round_response = full_response
+                    round_texts.append(full_response)
+                    round_models.append(_round_actual_model)
+                    round_endpoint_ids.append(_round_actual_endpoint_id)
+                    round_endpoint_labels.append(_round_actual_endpoint_label)
+                    _finalize_round_usage()
+                    logger.info("[agent] completed preemptive explicit %s", _preemptive_tool)
+                    break
         logger.info(
             "[agent-timing] round_start round=%s model=%s endpoint=%s prompt_tokens=%s output_tokens=%s tools=%s native_tools=%s timeout=%s",
             round_num,
