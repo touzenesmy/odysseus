@@ -200,3 +200,5 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `874ef867` — docs(specs): commit-map — 9f20f505 (execution-side opt-in var alignment)
 - `94edfa88` — fix(agent): preemptive calendar lookup blocked by an execution gate defers to the model round (Backlog #8; same leak, second branch)
 - `23351ef4` — docs(specs): ROADMAP #8/#9 COMPLETE status (calendar tail 94edfa88, env alignment 9f20f505) + commit-map rows
+- `20cd9b41` — docs(specs): commit-map — backfill 3 unmapped docs commits (03e0a612, 874ef867, 23351ef4) + fix tail ordering; restores ahead=entries+1
+- `f6f38fea` — docs(specs): ROADMAP #9 — correct superseded 'no native private_browser' claim (real native tool, metadata-only in local mode)
