@@ -532,3 +532,73 @@ async def test_completion_gate_bypass_terminal_final_is_prose_only(monkeypatch):
     chunks2 = [chunk async for chunk in stream_no_prose([])]
     finals2 = [json.loads(c[6:]) for c in chunks2 if 'final_response' in c]
     assert finals2[0]['content'] == transcript
+
+
+@pytest.mark.asyncio
+async def test_completion_gate_bypass_terminal_scoped_to_last_round(monkeypatch):
+    """Backlog #10 regression: on a multi-round agent turn the loop's terminal
+    final_response carries the ENTIRE turn's accumulated prose (full_response
+    is never reset per round), while the client treats final_response as a
+    whole-bubble replacement of the LAST round's bubble. Rewriting the
+    terminal to every round's prose renders the final bubble as one wall of
+    text. The rewrite must scope to the prose streamed in the final round -
+    the loop marks each round boundary with an agent_step (round: N+1)."""
+    monkeypatch.setenv('ODYSSEUS_COMPLETION_GATE', '0')
+    round1 = "I'll check the file first."
+    round2 = "It exists. Now reading it."
+    round3 = "Done: the file has 3 lines."
+
+    @with_completion_gate
+    async def stream(messages):
+        yield _event({'delta': round1})
+        yield _event({'type': 'agent_step', 'round': 2})
+        yield _event({'delta': round2})
+        yield _event({'type': 'tool_start', 'data': {'tool': 'bash'}})
+        yield _event({'type': 'tool_output', 'data': {'tool': 'bash', 'output': 'a\nb\nc\n'}})
+        yield _event({'type': 'agent_step', 'round': 3})
+        yield _event({'delta': round3})
+        # The loop's real terminal: full_response = every round's prose.
+        yield _event({'type': 'final_response', 'content': round1 + '\n' + round2 + '\n' + round3})
+        yield DONE
+
+    chunks = [chunk async for chunk in stream([])]
+    # Every event still streams live, in order, untouched.
+    assert round1 in chunks[0] and round2 in chunks[2] and round3 in chunks[6]
+    assert 'agent_step' in chunks[1] and 'agent_step' in chunks[5]
+    finals = [json.loads(c[6:]) for c in chunks if 'final_response' in c]
+    assert len(finals) == 1
+    # The terminal frame replaces the last bubble - it must carry exactly
+    # that bubble's prose, not the whole-turn transcript.
+    assert finals[0]['content'] == round3
+    assert round1 not in finals[0]['content'] and round2 not in finals[0]['content']
+    assert 'a\nb\nc' not in finals[0]['content']
+
+
+@pytest.mark.asyncio
+async def test_completion_gate_bypass_structured_snapshot_resets_prose_scope(monkeypatch):
+    """A structured intermediate final_response (render_owner=structured)
+    replaces the whole turn; prose streamed after it belongs to a fresh
+    synthesis and must be the scope of the next rewrite."""
+    monkeypatch.setenv('ODYSSEUS_COMPLETION_GATE', '0')
+    before = "Let me look that up."
+    structured = "The weather in Québec is 12C."
+    after = "Anything else I can help with?"
+
+    @with_completion_gate
+    async def stream(messages):
+        yield _event({'delta': before})
+        yield _event({'type': 'final_response', 'content': structured,
+                      'render_owner': 'structured', 'replacement_scope': 'turn'})
+        yield _event({'type': 'agent_step', 'round': 2})
+        yield _event({'delta': after})
+        yield _event({'type': 'final_response', 'content': structured + '\n' + after})
+        yield DONE
+
+    chunks = [chunk async for chunk in stream([])]
+    finals = [json.loads(c[6:]) for c in chunks if 'final_response' in c]
+    assert len(finals) == 2
+    # Structured frame passes through untouched.
+    assert finals[0]['content'] == structured
+    # The terminal rewrite is scoped to the post-snapshot synthesis only.
+    assert finals[1]['content'] == after
+    assert structured not in finals[1]['content'] and before not in finals[1]['content']

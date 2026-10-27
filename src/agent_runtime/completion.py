@@ -217,12 +217,17 @@ def with_completion_gate(func):
         if os.getenv('ODYSSEUS_COMPLETION_GATE', '1') == '0':
             # Pre-wave-3 passthrough: every event streams untouched as it
             # arrives. One rewrite: the loop's terminal final_response carries
-            # the full assembled round transcript (prose + fenced tool
-            # outputs), which clients treat as a whole-bubble replacement -
-            # that is what renders the turn as one wall of text. Rewrite its
-            # content to the prose that actually streamed (the tool output
-            # already lives in its tool cards), keeping the terminal bubble
-            # = the model's own answer.
+            # the full turn transcript (every round's prose, accumulated in
+            # full_response), which clients treat as a whole-bubble
+            # replacement - that is what renders the final bubble as one wall
+            # of text. Rewrite its content to the prose of the round that
+            # actually streamed it: the loop emits an agent_step (round: N+1)
+            # at each round boundary, so prose_parts is reset there and what
+            # remains at the terminal frame is exactly the last round's
+            # streamed prose - matching the last round's bubble, which is the
+            # one the terminal frame replaces. Fallbacks: an intermediate
+            # final_response (structured snapshot) starts a fresh round; a
+            # turn with no prose deltas keeps the original content.
             prose_parts: list[str] = []
             async for chunk in func(*args, **kwargs):
                 data = None
@@ -234,9 +239,21 @@ def with_completion_gate(func):
                 if isinstance(data, dict):
                     if isinstance(data.get('delta'), str) and not data.get('thinking'):
                         prose_parts.append(data['delta'])
+                    elif data.get('type') == 'agent_step':
+                        # Round boundary: the previous round's prose is
+                        # already on screen in its own bubble; keep only the
+                        # prose streamed since this point.
+                        prose_parts = []
                     elif data.get('type') == 'final_response':
-                        data['content'] = ''.join(prose_parts).strip() or str(data.get('content') or '')
-                        chunk = 'data: ' + json.dumps(data) + '\n\n'
+                        if data.get('render_owner') == 'structured':
+                            # A structured snapshot owns the bubble it
+                            # replaces - pass its server-owned content through
+                            # untouched, and start a fresh prose scope for
+                            # whatever synthesis follows it.
+                            prose_parts = []
+                        else:
+                            data['content'] = ''.join(prose_parts).strip() or str(data.get('content') or '')
+                            chunk = 'data: ' + json.dumps(data) + '\n\n'
                 yield chunk
             return
         started = perf_counter()
