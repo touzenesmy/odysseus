@@ -203,3 +203,5 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `20cd9b41` — docs(specs): commit-map — backfill 3 unmapped docs commits (03e0a612, 874ef867, 23351ef4) + fix tail ordering; restores ahead=entries+1
 - `f6f38fea` — docs(specs): ROADMAP #9 — correct superseded 'no native private_browser' claim (real native tool, metadata-only in local mode)
 - `46272616` — fix(agent): scope completion-gate bypass terminal rewrite to the final round's prose (Backlog #10; final-bubble transcript wall on long agent turns)
+- `ec015031` — docs(specs): commit-map — backfill 20cd9b41 + f6f38fea rows (restores ahead=entries+1)
+- `a1fec8c2` — docs(specs): ROADMAP #10 FIXED status (46272616) + commit-map row
