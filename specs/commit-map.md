@@ -205,3 +205,6 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `46272616` — fix(agent): scope completion-gate bypass terminal rewrite to the final round's prose (Backlog #10; final-bubble transcript wall on long agent turns)
 - `ec015031` — docs(specs): commit-map — backfill 20cd9b41 + f6f38fea rows (restores ahead=entries+1)
 - `a1fec8c2` — docs(specs): ROADMAP #10 FIXED status (46272616) + commit-map row
+- `91a8f71c` — docs(specs): commit-map — backfill ec015031 + a1fec8c2 rows (audit; restores ahead=entries+1)
+- `98e7707c` — docs(specs): ROADMAP — smoke verified 2026-10-28 (user confirmed #10 works post-restart; #8/#9 live); status updated per keep-current
+- `2c535b47` — docs(specs): ROADMAP — Backlog #11 logged (deleted user messages still reach live session agent context) + status line
