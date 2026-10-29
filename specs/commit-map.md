@@ -216,3 +216,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `f77550fd` — docs(specs): commit-map — backfill afdf2b56, d8b67c01, 16cb3e22 rows (Backlog #11 closure; restores ahead=entries+1)
 - `4f91907d` — docs(specs): ROADMAP — status line: #11 CLOSED as misdiagnosed (2026-10-29)
 - `df1a71cb` — docs(specs): commit-map — f77550fd + 4f91907d rows (restores ahead=entries+1)
+- `ff754834` — docs(specs): commit-map — df1a71cb row (restores ahead=entries+1)
