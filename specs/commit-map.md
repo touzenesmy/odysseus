@@ -210,3 +210,6 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `2c535b47` — docs(specs): ROADMAP — Backlog #11 logged (deleted user messages still reach live session agent context) + status line
 - `057f4d2e` — docs(specs): commit-map — backfill 91a8f71c, 98e7707c, 2c535b47 rows (audit keep-current; restores ahead=entries+1)
 - `1c23ba38` — docs(specs): ROADMAP — Backlog #12 logged (final answer routed to thinking field) + status line + commit-map row (057f4d2e)
+- `afdf2b56` — docs(specs): commit-map — 1c23ba38 row (Backlog #12)
+- `d8b67c01` — test(chat): repro guard — deleted stamped message leaves live context (Backlog #11 verification)
+- `16cb3e22` — docs(specs): ROADMAP — Backlog #11 CLOSED as misdiagnosed (app.log resurfacing, not context leak) + commit-map row (d8b67c01)
