@@ -213,3 +213,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `afdf2b56` — docs(specs): commit-map — 1c23ba38 row (Backlog #12)
 - `d8b67c01` — test(chat): repro guard — deleted stamped message leaves live context (Backlog #11 verification)
 - `16cb3e22` — docs(specs): ROADMAP — Backlog #11 CLOSED as misdiagnosed (app.log resurfacing, not context leak) + commit-map row (d8b67c01)
+- `f77550fd` — docs(specs): commit-map — backfill afdf2b56, d8b67c01, 16cb3e22 rows (Backlog #11 closure; restores ahead=entries+1)
