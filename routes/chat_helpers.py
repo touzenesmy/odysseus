@@ -59,6 +59,40 @@ def _skill_run_is_complex(agent_rounds: int, agent_tool_calls: int) -> bool:
     return agent_tool_calls >= 4 or (agent_rounds >= 5 and agent_tool_calls >= 3)
 
 
+def _dedupe_thinking_echoes(thinking: object, visible: object) -> str:
+    """Drop persisted-thinking blocks that are verbatim echoes of visible prose.
+
+    Local reasoning models (Qwen 3.8 tool-router) can stream the same progress
+    sentence in both reasoning_content and content. The echoed copy must not
+    persist under metadata["thinking"], or a history reload renders mid-work
+    output text in the thinking box while the visible bubble holds only the
+    final fragment. A block is an echo only when it is wholly contained in
+    text the user can already read (the streamed answer + per-round narration);
+    genuinely private reasoning is never a substring of that, so it survives
+    byte-identical. Returns "" when every block was an echo, and the original
+    string untouched when nothing was removed.
+    """
+    thinking = str(thinking or "")
+    if not thinking.strip():
+        return ""
+    visible = str(visible or "")
+    if not visible:
+        return thinking
+    kept: list[str] = []
+    changed = False
+    for block in thinking.split("\n\n"):
+        stripped = block.strip()
+        if not stripped:
+            continue
+        if len(stripped) >= 20 and stripped in visible:
+            changed = True
+            continue
+        kept.append(stripped)
+    if not changed:
+        return thinking
+    return "\n\n".join(kept)
+
+
 def clean_repeated_assistant_content(text: object) -> str:
     """Collapse repeated terminal assistant prose before history/SFT storage."""
     value = str(text or "")
@@ -1659,6 +1693,20 @@ def save_assistant_response(
         _content = _think_info["reply"]
     else:
         _content = full_response
+    # The model's reasoning stream may echo visible progress prose verbatim
+    # (reasoning_content alongside content). Strip those echoes so a history
+    # reload does not render mid-work output text in the thinking box; the
+    # live stream is untouched, only what is persisted is reconciled.
+    if md.get("thinking"):
+        _visible_for_dedupe = "\n".join(
+            [str(r) for r in (md.get("round_texts") or []) if str(r or "").strip()]
+            + [str(_content or "")]
+        )
+        _deduped_thinking = _dedupe_thinking_echoes(md["thinking"], _visible_for_dedupe)
+        if _deduped_thinking:
+            md["thinking"] = _deduped_thinking
+        else:
+            md.pop("thinking", None)
     if incognito:
         _append_incognito_message(session_id, "assistant", _content, md)
         return None

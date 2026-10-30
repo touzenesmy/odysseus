@@ -450,6 +450,129 @@ def test_save_assistant_response_incognito_does_not_mutate_session_history():
     assert sess.history == []
 
 
+def test_save_assistant_response_strips_visible_prose_echoed_into_thinking(monkeypatch):
+    """A local reasoning model can echo a visible progress sentence into
+    reasoning_content as well as content. The echoed copy must not persist
+    under metadata["thinking"], or history reload renders output text in the
+    thinking box while the bubble only shows the final fragment."""
+    import core.database as _db
+
+    monkeypatch.setattr(_db, "update_session_last_accessed", lambda *a, **k: None)
+    monkeypatch.setattr(chat_helpers, "_append_sft_trace_record", lambda **k: None)
+
+    round_0 = (
+        "The user explicitly asked for this skill edit, so the gate is "
+        "satisfied. Per your skill-management convention, I'll follow the "
+        "full procedure: locate, backup, view, edit, verify, version bump."
+    )
+    round_1 = (
+        "Found the skill at two paths -- checking if they're the same file "
+        "and finding the push-related docs:"
+    )
+    round_2 = (
+        "Backups are in place. Now I'll find the last session-ledger line "
+        "in the fork skill to see where new entries go."
+    )
+    private = (
+        "The sandbox HOME is faked, so the real key path only matters "
+        "inside bubblewrap; the SSH config itself is unreadable there."
+    )
+    visible_reply = (
+        "Step 4's anchor didn't match -- file unchanged (write happens "
+        "last). Checking the exact section text:"
+    )
+    metrics = {
+        "model": "qwen3.8-27b",
+        "round_texts": [round_0, round_1, round_2],
+        "thinking": "\n\n".join([round_0, round_1, private, round_2]),
+        "tool_events": [{"name": "read_file", "result": "ok"}],
+    }
+    sess = _FakeSession("qwen3.8-27b")
+
+    save_assistant_response(
+        sess,
+        SimpleNamespace(save_sessions=lambda: None),
+        "s-echo",
+        full_response=visible_reply,
+        last_metrics=metrics,
+    )
+
+    assert len(sess.history) == 1
+    saved = sess.history[-1]
+    assert saved.content == visible_reply
+    # Only the genuinely private block survives; echoed prose is stripped.
+    assert saved.metadata.get("thinking") == private
+
+
+def test_save_assistant_response_drops_fully_echoed_thinking(monkeypatch):
+    """When every thinking block is a verbatim echo of visible prose (the
+    17:35 skill-edit turn), the persisted message carries no thinking at
+    all: reload must not open an output-text thinking box."""
+    import core.database as _db
+
+    monkeypatch.setattr(_db, "update_session_last_accessed", lambda *a, **k: None)
+    monkeypatch.setattr(chat_helpers, "_append_sft_trace_record", lambda **k: None)
+
+    round_0 = "Checking the skill library and where push instructions live:"
+    round_1 = "The fork skill is the primary one. Reading its push sections:"
+    visible_reply = "Command verified (up-to-date, exit 0)."
+    metrics = {
+        "model": "qwen3.8-27b",
+        "round_texts": [round_0, round_1],
+        "thinking": "\n\n".join([round_0, round_1]),
+        "tool_events": [{"name": "bash", "result": "ok"}],
+    }
+    sess = _FakeSession("qwen3.8-27b")
+
+    save_assistant_response(
+        sess,
+        SimpleNamespace(save_sessions=lambda: None),
+        "s-echo-full",
+        full_response=visible_reply,
+        last_metrics=metrics,
+    )
+
+    saved = sess.history[-1]
+    assert saved.content == visible_reply
+    assert "thinking" not in (saved.metadata or {})
+    assert not (saved.metadata or {}).get("thinking")
+
+
+def test_save_assistant_response_keeps_private_thinking_intact(monkeypatch):
+    """Guard against over-dedup: genuinely private reasoning (clean
+    conclusion turns) must persist byte-identical."""
+    import core.database as _db
+
+    monkeypatch.setattr(_db, "update_session_last_accessed", lambda *a, **k: None)
+    monkeypatch.setattr(chat_helpers, "_append_sft_trace_record", lambda **k: None)
+
+    thinking = (
+        "Wait -- I should double-check the anchor line before writing.\n\n"
+        "The version bump must land in the frontmatter, not the body."
+    )
+    visible_reply = (
+        "All three documentation edits are in place and the session "
+        "ledger entry is recorded."
+    )
+    metrics = {
+        "model": "qwen3.8-27b",
+        "round_texts": [visible_reply],
+        "thinking": thinking,
+    }
+    sess = _FakeSession("qwen3.8-27b")
+
+    save_assistant_response(
+        sess,
+        SimpleNamespace(save_sessions=lambda: None),
+        "s-private",
+        full_response=visible_reply,
+        last_metrics=metrics,
+    )
+
+    saved = sess.history[-1]
+    assert saved.metadata.get("thinking") == thinking
+
+
 def test_add_user_message_incognito_does_not_mutate_session_history():
     sess = _FakeSession("selected-model")
     chat_handler = SimpleNamespace(update_session_name_if_needed=lambda *_args, **_kwargs: None)
