@@ -219,3 +219,9 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `ff754834` — docs(specs): commit-map — df1a71cb row (restores ahead=entries+1)
 - `444608f5` — docs(specs): ROADMAP — session log: #11 closure evidence + sandbox push workaround (verified)
 - `a9254ae6` — docs(specs): commit-map — ff754834 row
+- `2ca1e255` — chore(deploy): update.sh pinned to ImprovementsDev so the port branch is self-updating via deploy.sh
+- `fc3f14cb` — docs(specs): PORT-GUIDE — post-security port plan (Scaffold -> ImprovementsDev)
+- `80c2d98a` — docs(specs): PORT-GUIDE — post-security port plan (Scaffold -> ImprovementsDev)
+- `f786bcdf` — docs(specs): PORT-GUIDE — §F dual-version deploy state (2026-10-21)
+- `12c8d1b9` — docs(specs): commit-map — backfill 444608f5 + a9254ae6 rows (restores ahead=entries+1)
+- `d08d3acf` — fix(agent): strip visible-prose echoes from persisted thinking field
