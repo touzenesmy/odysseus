@@ -1385,7 +1385,9 @@ async def _tool_approval_resolution_stream(decision: str) -> AsyncGenerator[str,
     yield "data: [DONE]\n\n"
 
 
-async def _sse_keepalive(agen, interval: float = 30.0) -> AsyncGenerator[str, None]:
+async def _sse_keepalive(
+    agen, interval: float = 30.0, max_idle: Optional[float] = None
+) -> AsyncGenerator[str, None]:
     """Re-emit SSE comment heartbeats whenever an upstream generator idles > interval.
 
     Proxies (NPM/nginx default 60s proxy_read_timeout) sever *silent* SSE
@@ -1400,6 +1402,17 @@ async def _sse_keepalive(agen, interval: float = 30.0) -> AsyncGenerator[str, No
     """
     q: "asyncio.Queue[object]" = asyncio.Queue()
     _DONE = object()
+
+    # Backstop for a WEDGED upstream (Backlog #13): a turn that stops producing
+    # SSE without erroring (a local-model / round-prep wedge) would otherwise
+    # keep the stream open and the run "running" forever — no error frame, no
+    # partial save, the user just sees a frozen turn for 20+ minutes. Heartbeats
+    # keep the *connection* alive but cannot recover a wedged turn, so this
+    # bound makes the stall visible and terminable instead of silent. None ->
+    # a generous, env-tunable default so healthy slow turns are never cut.
+    if max_idle is None:
+        max_idle = float(os.environ.get("ODYSSEUS_SSE_KEEPALIVE_MAX_IDLE_S", "600"))
+    last_activity = time.monotonic()
 
     async def _pump() -> None:
         try:
@@ -1421,12 +1434,55 @@ async def _sse_keepalive(agen, interval: float = 30.0) -> AsyncGenerator[str, No
             try:
                 item = await asyncio.wait_for(q.get(), timeout=interval)
             except asyncio.TimeoutError:
+                if (time.monotonic() - last_activity) >= max_idle:
+                    # Wedged upstream: stop the turn instead of heartbeating
+                    # forever. Cancelling the pump delivers CancelledError into
+                    # its blocked __anext__(), which runs the upstream
+                    # generator's finally — the route's partial-save handler —
+                    # and lets the drain task unwind to a terminal run state.
+                    if not pump.done():
+                        pump.cancel()
+                    # AWAIT the pump (unlike the fire-and-forget close path in
+                    # the finally below, where we must not block the client
+                    # disconnect on a slow __anext__): the stream is still open
+                    # here, and we must guarantee the upstream's finally
+                    # (partial save) has run before we emit the terminal frame
+                    # and return. The cancellation is already in flight, so this
+                    # returns as soon as the upstream unwinds.
+                    try:
+                        await pump
+                    except BaseException:
+                        # Cancelled pump or an error raised in the upstream's
+                        # finally — both expected/acceptable at a forced stop.
+                        pass
+                    logger.warning(
+                        "[sse-keepalive] wedged turn stopped: no SSE progress "
+                        "for >= %.0fs (max_idle); emitting terminal error",
+                        max_idle,
+                    )
+                    yield (
+                        "event: error\n"
+                        "data: "
+                        + json.dumps(
+                            {
+                                "error": (
+                                    "Turn stalled: no progress for a long "
+                                    "period; stream stopped."
+                                ),
+                                "status": 504,
+                            }
+                        )
+                        + "\n\n"
+                    )
+                    yield "data: [DONE]\n\n"
+                    return
                 yield ": heartbeat\n\n"
                 continue
             if item is _DONE:
                 return
             if isinstance(item, BaseException):
                 raise item
+            last_activity = time.monotonic()
             yield item
     finally:
         # Fire-and-forget: Task.cancel() returns a bool (NOT awaitable), and
