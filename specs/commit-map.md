@@ -228,3 +228,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `9d772ccc` — docs(specs): ROADMAP — Backlog #12 partial resolution (echo sub-variant d08d3acf) + commit-map backfill 6 rows (restores ahead=entries+1)
 - `f38fae45` — fix(agent): persist the final round's answer, not the full transcript, on reload (Backlog #12)
 - `031284fe` — fix(sse): idle-stop for wedged turns in _sse_keepalive (Backlog #13 silent-stall)
+- `64f1088d` — docs(specs): ROADMAP — #13 silent-stall sub-variant FIXED (max_idle idle-stop, 031284fe) + status line
