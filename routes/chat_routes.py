@@ -74,6 +74,7 @@ from routes.chat_helpers import (
     _allowed_models_for_request,
     _enforce_chat_privileges,
     _stable_prefix_len,
+    _select_saved_response,
 )
 from src.action_intents import ToolIntent, classify_tool_intent as _classify_tool_intent
 from src.image_model_ids import looks_like_image_generation_model
@@ -5109,20 +5110,7 @@ def setup_chat_routes(
                             if not _terminal_saved and (full_response or _has_tool_events):
                                 _metrics_to_save = _render_state.metadata(last_metrics)
                                 _round_texts = _metrics_to_save.get("round_texts") or []
-                                _final_round_text = next(
-                                    (
-                                        _visible_response_text_for_save(_item)
-                                        for _item in reversed(_round_texts)
-                                        if _visible_response_text_for_save(_item)
-                                    ),
-                                    "",
-                                )
-                                _visible_full_response = _visible_response_text_for_save(full_response)
-                                _response_to_save = (
-                                    _visible_full_response
-                                    or _final_round_text
-                                    or "Done."
-                                )
+                                _response_to_save = _select_saved_response(full_response, _round_texts)
                                 if _response_to_save and _round_texts:
                                     for _idx in range(len(_round_texts) - 1, -1, -1):
                                         if _visible_response_text_for_save(_round_texts[_idx]):

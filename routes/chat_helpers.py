@@ -1622,6 +1622,71 @@ def clean_thinking_for_save(content: str, metadata: dict | None = None) -> tuple
     return content, md
 
 
+def _visible_response_text_for_save(text: object) -> str:
+    """Visible prose of a saved reply, with think blocks and tool markup gone."""
+    value = clean_repeated_assistant_content(text)
+    value = value.strip()
+    value = re.sub(r"\bDone\.\s*Done\.\s*$", "Done.", value)
+    value = re.sub(
+        r"^((?:Updated|Deleted|Created|Saved|Marked|Archived|Blocked|Unblocked|Opened|Closed)\b.+?\.)\s*Done\.\s*$",
+        r"\1",
+        value,
+        flags=re.DOTALL,
+    )
+    return value
+
+
+_TRIVIAL_COMPLETION_VALUES = frozenset({"", "done"})
+
+
+def _is_trivial_completion_marker(text: object) -> bool:
+    """True when a round's visible text is a bare completion ack ("" / "Done.").
+
+    Such a round carries no answer of its own, so the turn's persisted reply
+    must fall back to the full accumulated transcript instead of the ack.
+    """
+    value = _visible_response_text_for_save(text)
+    value = re.sub(r"[.!?\s]+", "", value).lower()
+    return value in _TRIVIAL_COMPLETION_VALUES
+
+
+def _final_round_persist_text(final_round_text: str, full_response: str) -> str:
+    """Text to persist as the turn's final bubble (history-reload path).
+
+    Keep the model's own final round when it is a substantive answer; only
+    substitute the accumulated full transcript when the final round was a bare
+    'Done.', so a multi-round agent turn doesn't persist the whole transcript
+    as one wall of text on reload.
+    """
+    last_round = _visible_response_text_for_save(final_round_text)
+    if last_round and not _is_trivial_completion_marker(last_round):
+        return last_round
+    return str(full_response or "").strip()
+
+
+def _select_saved_response(full_response: str, round_texts: list) -> str:
+    """Pick the persisted reply text for a finished turn.
+
+    Prefer the final round's own answer when it is substantive (the [DONE]
+    save path used to prefer the full accumulated transcript, which is what
+    persisted the spew-on-reload wall, Backlog #12). Fall back to the full
+    visible transcript when the final round was a bare ack, to the last
+    non-empty round when the transcript is empty, then the "Done." default.
+    """
+    _visible_full_response = _visible_response_text_for_save(full_response)
+    _final_round_text = next(
+        (
+            _visible_response_text_for_save(_item)
+            for _item in reversed(round_texts or [])
+            if _visible_response_text_for_save(_item)
+        ),
+        "",
+    )
+    if _final_round_text and not _is_trivial_completion_marker(_final_round_text):
+        return _final_round_text
+    return _visible_full_response or _final_round_text or "Done."
+
+
 def save_assistant_response(
     sess,
     session_manager,

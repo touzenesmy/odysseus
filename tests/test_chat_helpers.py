@@ -573,6 +573,62 @@ def test_save_assistant_response_keeps_private_thinking_intact(monkeypatch):
     assert saved.metadata.get("thinking") == thinking
 
 
+def test_is_trivial_completion_marker():
+    from routes.chat_helpers import _is_trivial_completion_marker
+
+    assert _is_trivial_completion_marker("") is True
+    assert _is_trivial_completion_marker("Done.") is True
+    assert _is_trivial_completion_marker("done") is True
+    assert _is_trivial_completion_marker("  Done!  ") is True
+    assert _is_trivial_completion_marker("Here is the answer: X") is False
+
+
+def test_final_round_persist_text_keeps_substantive_final_round():
+    """Backlog #12 (spew-on-reload): a multi-round agent turn whose final
+    round is a real answer must persist that answer as the final bubble --
+    not the full accumulated transcript (which reload renders as one wall)."""
+    from routes.chat_helpers import _final_round_persist_text
+
+    full = "Checking the schema first.\nThen pulling the rows.\nHere is the final answer: X"
+    last_round = "Here is the final answer: X"
+    assert _final_round_persist_text(last_round, full) == last_round
+
+
+def test_final_round_persist_text_falls_back_to_full_on_ack():
+    """A bare 'Done.' final round carries no answer of its own: the full
+    transcript must stand in for it (preserves the pre-existing behavior for
+    turns that end in an ack)."""
+    from routes.chat_helpers import _final_round_persist_text
+
+    full = "Checking the schema first.\nThen pulling the rows."
+    assert _final_round_persist_text("Done.", full) == full
+
+
+def test_select_saved_response_prefers_substantive_final_round():
+    """Backlog #12: the [DONE] save path must persist the final round's own
+    answer, not the full transcript, when that round is substantive."""
+    from routes.chat_helpers import _select_saved_response
+
+    full = "Step 1.\nStep 2.\nFinal: X"
+    assert _select_saved_response(full, ["Step 1.", "Step 2.", "Final: X"]) == "Final: X"
+
+
+def test_select_saved_response_full_when_final_round_is_ack():
+    """When the final round is a bare ack, the full transcript is the reply
+    (behavior preserved)."""
+    from routes.chat_helpers import _select_saved_response
+
+    full = "Step 1.\nStep 2."
+    assert _select_saved_response(full, ["Step 1.", "Step 2.", "Done."]) == full
+
+
+def test_select_saved_response_falls_back_when_full_empty():
+    from routes.chat_helpers import _select_saved_response
+
+    assert _select_saved_response("", ["Step 1."]) == "Step 1."
+    assert _select_saved_response("", []) == "Done."
+
+
 def test_add_user_message_incognito_does_not_mutate_session_history():
     sess = _FakeSession("selected-model")
     chat_handler = SimpleNamespace(update_session_name_if_needed=lambda *_args, **_kwargs: None)

@@ -38000,9 +38000,12 @@ async def stream_agent_loop(
         full_response = _linkify_email_titles_from_tool_events(full_response, tool_events)
         full_response = _linkify_calendar_titles_from_tool_events(full_response, tool_events)
         if round_texts and full_response.strip():
+            from routes.chat_helpers import _final_round_persist_text
             for _idx in range(len(round_texts) - 1, -1, -1):
                 if _visible_response_text(str(round_texts[_idx] or "")):
-                    round_texts[_idx] = full_response.strip()
+                    round_texts[_idx] = _final_round_persist_text(
+                        str(round_texts[_idx] or ""), full_response
+                    )
                     break
 
     if (
