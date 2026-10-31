@@ -225,3 +225,6 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `f786bcdf` — docs(specs): PORT-GUIDE — §F dual-version deploy state (2026-10-21)
 - `12c8d1b9` — docs(specs): commit-map — backfill 444608f5 + a9254ae6 rows (restores ahead=entries+1)
 - `d08d3acf` — fix(agent): strip visible-prose echoes from persisted thinking field
+- `9d772ccc` — docs(specs): ROADMAP — Backlog #12 partial resolution (echo sub-variant d08d3acf) + commit-map backfill 6 rows (restores ahead=entries+1)
+- `f38fae45` — fix(agent): persist the final round's answer, not the full transcript, on reload (Backlog #12)
+- `031284fe` — fix(sse): idle-stop for wedged turns in _sse_keepalive (Backlog #13 silent-stall)
