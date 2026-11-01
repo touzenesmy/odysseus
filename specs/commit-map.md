@@ -231,3 +231,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `64f1088d` — docs(specs): ROADMAP — #13 silent-stall sub-variant FIXED (max_idle idle-stop, 031284fe) + status line
 - `4dae1618` — docs(specs): commit-map — backfill 9d772ccc + f38fae45 + 031284fe rows (restores ahead=entries+1)
 - `f6522971` — docs(specs): commit-map — backfill 64f1088d row (missed in prior pass)
+- `f48e92b7` — docs(specs): ROADMAP — #12 transcript-wall sub-variant CONFIRMED RESOLVED by user
