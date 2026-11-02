@@ -237,3 +237,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `61136711` — docs(specs): commit-map — backfill f48e92b7 row (restores keep-current: only HEAD unlisted)
 - `704932e9` — docs(specs): ROADMAP — #2 voice smoke PASSED (item #2 CLOSED: bash+voice+strict all green); commit-map backfill eb5e35a6
 - `95a3b0e7` — fix(agent): detect silent terminations at the loop break — no tool call, empty visible content, long reasoning (Backlog #12, 20:11 sub-variant; TDD 5 red→green, full-suite A/B delta = 0)
+- `e7b195e8` — docs(specs): ROADMAP #12 silent-termination detection FIXED (95a3b0e7) + status line + commit-map backfill 4 rows (17db90d6, 61136711, 704932e9, 95a3b0e7; self-row omitted by keep-current rule)
