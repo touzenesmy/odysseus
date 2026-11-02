@@ -233,3 +233,7 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `f6522971` — docs(specs): commit-map — backfill 64f1088d row (missed in prior pass)
 - `f48e92b7` — docs(specs): ROADMAP — #12 transcript-wall sub-variant CONFIRMED RESOLVED by user
 - `eb5e35a6` — docs(specs): ROADMAP — chunk-3 NEXT items done (deploy + smoke 2026-11-01); #2 strict sub-check ticked; hold period started on ImprovementsDev @ 61136711
+- `17db90d6` — docs(specs): commit-map — backfill 4dae1618 + f6522971 rows (self-row omitted by keep-current rule; restores ahead=entries+1)
+- `61136711` — docs(specs): commit-map — backfill f48e92b7 row (restores keep-current: only HEAD unlisted)
+- `704932e9` — docs(specs): ROADMAP — #2 voice smoke PASSED (item #2 CLOSED: bash+voice+strict all green); commit-map backfill eb5e35a6
+- `95a3b0e7` — fix(agent): detect silent terminations at the loop break — no tool call, empty visible content, long reasoning (Backlog #12, 20:11 sub-variant; TDD 5 red→green, full-suite A/B delta = 0)
