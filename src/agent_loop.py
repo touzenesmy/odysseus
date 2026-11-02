@@ -16922,6 +16922,55 @@ def _empty_response_fallback(
     return _error_msg, f'data: {json.dumps({"delta": _error_msg})}\n\n'
 
 
+# Backlog #12 (silent-termination detection): a final round can end with no
+# tool call, no visible content, and the complete answer written into the
+# reasoning stream (the 2026-10-28 20:11 EDT audit turn: 23.2K output tokens,
+# 208 chars visible, the 71K-char report only in thinking). The loop used to
+# break and the turn ended silently. Below this reasoning length a quiet
+# reasoning-only final round is not treated as a silent termination.
+SILENT_TERMINATION_MIN_REASONING = 500
+
+
+def silent_termination_warning(
+    final_visible: str,
+    round_reasoning: str,
+    tool_events: list,
+    round_num: int | None = None,
+) -> "str | None":
+    """Detect a silent termination of the FINAL round and build its warning.
+
+    A silent termination is: the final round made no tool call, produced no
+    visible content, and its reasoning stream is long (the answer was written
+    into thinking and never emitted as content). The caller yields the frame
+    and appends the pointer to the final response so the user sees WHERE the
+    output is instead of a silent, truncated reply.
+
+    Returns an SSE frame string, or None when the turn is not a silent
+    termination (visible content present, short reasoning, or a tool call).
+    """
+    if _visible_response_text(final_visible):
+        return None
+    if tool_events:
+        return None
+    _reasoning_text = str(round_reasoning or "").strip()
+    if len(_reasoning_text) < SILENT_TERMINATION_MIN_REASONING:
+        return None
+    _message = (
+        "⚠️ This turn ended without a visible final answer — "
+        f"{len(_reasoning_text)} characters of the model's output stayed in "
+        "its thinking stream. That output is preserved in the thinking "
+        "section above this message."
+    )
+    payload = {
+        "type": "warning",
+        "reason": "silent_termination",
+        "message": _message,
+    }
+    if round_num is not None:
+        payload["round"] = round_num
+    return f'data: {json.dumps(payload)}\n\n'
+
+
 PLAN_MODE_DIRECTIVE = (
     "## PLAN MODE — OVERRIDES EVERYTHING ELSE BELOW\n"
     "You are in PLAN MODE. Your ONLY job this turn is to PROPOSE a plan. You have "
@@ -31222,6 +31271,38 @@ async def stream_agent_loop(
                 yield f'data: {json.dumps({"type": "agent_step", "round": round_num + 1})}\n\n'
                 continue
             if not tool_blocks:
+                # Backlog #12: the final round can end with no tool call, no
+                # visible content, and the whole answer written into the
+                # reasoning stream (2026-10-28 20:11 audit turn). Surface a
+                # pointer to the thinking section instead of ending silently.
+                # Detection is final-round-scoped on purpose: earlier rounds'
+                # tool events must not suppress it (the 20:11 turn had 16).
+                _silent_termination_frame = silent_termination_warning(
+                    cleaned_round, round_reasoning, [],
+                    round_num=round_num,
+                )
+                if _silent_termination_frame:
+                    _silent_message = json.loads(
+                        _silent_termination_frame[len("data: "):-len("\n\n")]
+                    )["message"]
+                    full_response = (
+                        full_response.rstrip()
+                        + ("\n\n" if full_response.strip() else "")
+                        + _silent_message
+                    )
+                    if round_texts:
+                        round_texts[-1] = (
+                            (round_texts[-1] or "").rstrip()
+                            + "\n\n" + _silent_message
+                        ).strip()
+                    logger.warning(
+                        "[agent] silent-termination guard fired on round %d "
+                        "(final round: no tool call, empty visible content, "
+                        "%d chars of reasoning)",
+                        round_num,
+                        len(str(round_reasoning or "")),
+                    )
+                    yield _silent_termination_frame
                 break  # no tools — done
 
         # ── Loop-breaker (Terminus-style stall detector) ──────────────
