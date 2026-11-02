@@ -240,3 +240,5 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `e7b195e8` — docs(specs): ROADMAP #12 silent-termination detection FIXED (95a3b0e7) + status line + commit-map backfill 4 rows (17db90d6, 61136711, 704932e9, 95a3b0e7; self-row omitted by keep-current rule)
 - `2d031991` — fix(agent): double-check of 95a3b0e7 — pointer must reach the live client (delta after the marker frame; chat.js skips the warning type), tool_events param renamed final_round_tool_events (Backlog #12; focused net 76 passed)
 - `51634960` — docs(specs): ROADMAP — #12 double-check + fix 2d031991 (live-bubble pointer via delta) + commit-map backfill e7b195e8
+- `a9cc0abe` — docs(specs): commit-map — backfill 2d031991 row (self-row omitted by keep-current rule)
+- `a80a2d37` — docs(specs): commit-map — backfill 51634960 row (self-row omitted by keep-current rule)
