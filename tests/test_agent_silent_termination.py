@@ -42,7 +42,7 @@ def test_silent_termination_detected_on_long_reasoning_empty_content():
     warning = silent_termination_warning(
         final_visible="",
         round_reasoning="x" * 2000,
-        tool_events=[],
+        final_round_tool_events=[],
     )
     assert warning is not None
     assert "thinking" in warning.lower()
@@ -53,7 +53,7 @@ def test_no_warning_when_final_visible_content_present():
     warning = silent_termination_warning(
         final_visible="Here is the audit report you asked for.",
         round_reasoning="x" * 2000,
-        tool_events=[],
+        final_round_tool_events=[],
     )
     assert warning is None
 
@@ -63,7 +63,7 @@ def test_no_warning_below_reasoning_threshold():
     warning = silent_termination_warning(
         final_visible="",
         round_reasoning="x" * (SILENT_TERMINATION_MIN_REASONING - 1),
-        tool_events=[],
+        final_round_tool_events=[],
     )
     assert warning is None
 
@@ -74,7 +74,7 @@ def test_no_warning_when_final_round_has_tool_call():
     warning = silent_termination_warning(
         final_visible="",
         round_reasoning="x" * 2000,
-        tool_events=[{"tool": "host_shell", "output": "ok"}],
+        final_round_tool_events=[{"tool": "host_shell", "output": "ok"}],
     )
     assert warning is None
 
@@ -95,7 +95,7 @@ def test_warning_frame_shape_and_reasoning_not_re_emitted():
     frame = silent_termination_warning(
         final_visible="",
         round_reasoning=reasoning,
-        tool_events=[],
+        final_round_tool_events=[],
     )
     payload = _parse_sse_frame(frame)
     assert payload["type"] == "warning"

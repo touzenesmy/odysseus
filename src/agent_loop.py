@@ -16934,7 +16934,7 @@ SILENT_TERMINATION_MIN_REASONING = 500
 def silent_termination_warning(
     final_visible: str,
     round_reasoning: str,
-    tool_events: list,
+    final_round_tool_events: list,
     round_num: int | None = None,
 ) -> "str | None":
     """Detect a silent termination of the FINAL round and build its warning.
@@ -16945,12 +16945,16 @@ def silent_termination_warning(
     and appends the pointer to the final response so the user sees WHERE the
     output is instead of a silent, truncated reply.
 
+    `final_round_tool_events` is the FINAL round's tool blocks, not the
+    turn-wide list — earlier rounds' events must not suppress detection (the
+    20:11 turn had 16 in prior rounds).
+
     Returns an SSE frame string, or None when the turn is not a silent
     termination (visible content present, short reasoning, or a tool call).
     """
     if _visible_response_text(final_visible):
         return None
-    if tool_events:
+    if final_round_tool_events:
         return None
     _reasoning_text = str(round_reasoning or "").strip()
     if len(_reasoning_text) < SILENT_TERMINATION_MIN_REASONING:
@@ -31303,6 +31307,10 @@ async def stream_agent_loop(
                         len(str(round_reasoning or "")),
                     )
                     yield _silent_termination_frame
+                    # The warning frame is a log/persistence marker; the chat
+                    # client skips unknown frame types, so the pointer must
+                    # also arrive as a delta to be visible in the live view.
+                    yield f'data: {json.dumps({"delta": _silent_message})}\n\n'
                 break  # no tools — done
 
         # ── Loop-breaker (Terminus-style stall detector) ──────────────
