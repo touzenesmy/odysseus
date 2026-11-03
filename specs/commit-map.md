@@ -248,3 +248,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `9c8f4eff` — docs(specs): ROADMAP — #12 fourth pass: idempotent persistence (49fd3959) + status + #12 entry + commit-map row
 - `9f85434a` — docs(specs): commit-map — backfill 5153c22a row (keep-current: only HEAD unlisted)
 - `08792a25` — docs(specs): commit-map — backfill 9c8f4eff row (keep-current: only HEAD unlisted)
+- `23dc007e` — docs(specs): commit-map — backfill 9f85434a row (keep-current: only HEAD unlisted)
