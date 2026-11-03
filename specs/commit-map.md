@@ -243,3 +243,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `a9cc0abe` — docs(specs): commit-map — backfill 2d031991 row (self-row omitted by keep-current rule)
 - `a80a2d37` — docs(specs): commit-map — backfill 51634960 row (self-row omitted by keep-current rule)
 - `5a041cba` — fix(agent): silent-termination guard measures the inline think channel (Qwen path) + persists hidden raw text before the pointer (Backlog #12; TDD 7/7, focused net 140 passed)
+- `49fd3959` — fix(agent): silent-termination persistence idempotent per surface — standard path keeps the think markup (strip_tool_blocks preserves it), so the 5a041cba raw re-append duplicated it; extracted silent_termination_persistence() with per-surface endswith check + real tool_blocks at call site (Backlog #12 fourth pass; TDD 10/10, focused net 143 passed)
