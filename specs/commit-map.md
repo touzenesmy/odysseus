@@ -250,3 +250,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `08792a25` — docs(specs): commit-map — backfill 9c8f4eff row (keep-current: only HEAD unlisted)
 - `23dc007e` — docs(specs): commit-map — backfill 9f85434a row (keep-current: only HEAD unlisted)
 - `748902eb` — docs(specs): commit-map — backfill 08792a25 row (terminal: only HEAD unlisted)
+- `01809b70` — docs(specs): commit-map — backfill 23dc007e row (keep-current: only HEAD unlisted)
