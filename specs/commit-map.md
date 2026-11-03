@@ -242,3 +242,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `51634960` — docs(specs): ROADMAP — #12 double-check + fix 2d031991 (live-bubble pointer via delta) + commit-map backfill e7b195e8
 - `a9cc0abe` — docs(specs): commit-map — backfill 2d031991 row (self-row omitted by keep-current rule)
 - `a80a2d37` — docs(specs): commit-map — backfill 51634960 row (self-row omitted by keep-current rule)
+- `5a041cba` — fix(agent): silent-termination guard measures the inline think channel (Qwen path) + persists hidden raw text before the pointer (Backlog #12; TDD 7/7, focused net 140 passed)
