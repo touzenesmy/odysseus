@@ -23,6 +23,7 @@ import jsonschema
 from src.context_compactor import prune_multimodal_images, trim_for_context
 from src.agent_runtime.runtime_selection import COMPACT_PREVIEW_MODE
 from src import agent_runs
+from src.model_customization import apply_sampling
 from src.agent_evidence import command_has_mutation_effect, workspace_artifact_is_usable
 from src.tool_capabilities import ToolEffect, ToolRunSecurityContext, capabilities_for_action
 from src.tool_execution import execute_tool_block
@@ -5161,6 +5162,7 @@ async def preview_model_response(client, endpoint_url, headers, request, recover
             **request,
             'messages': provider_wire_messages(request['messages']),
         }
+        apply_sampling(provider_request, endpoint_url, request.get('model'))
         response_started = False
         try:
             async with client.stream(
