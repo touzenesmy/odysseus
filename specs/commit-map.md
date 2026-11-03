@@ -247,3 +247,4 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `49fd3959` — fix(agent): silent-termination persistence idempotent per surface — standard path keeps the think markup (strip_tool_blocks preserves it), so the 5a041cba raw re-append duplicated it; extracted silent_termination_persistence() with per-surface endswith check + real tool_blocks at call site (Backlog #12 fourth pass; TDD 10/10, focused net 143 passed)
 - `9c8f4eff` — docs(specs): ROADMAP — #12 fourth pass: idempotent persistence (49fd3959) + status + #12 entry + commit-map row
 - `9f85434a` — docs(specs): commit-map — backfill 5153c22a row (keep-current: only HEAD unlisted)
+- `08792a25` — docs(specs): commit-map — backfill 9c8f4eff row (keep-current: only HEAD unlisted)
