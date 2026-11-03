@@ -16993,6 +16993,69 @@ def silent_termination_warning(
     return f'data: {json.dumps(payload)}\n\n'
 
 
+def silent_termination_persistence(
+    full_response: str,
+    round_text: str,
+    round_response: str,
+    pointer_message: str,
+) -> "tuple[str, str]":
+    """Compose the persisted final response/round text after a silent turn.
+
+    Appends ``pointer_message`` (and, when needed, the hidden raw round text
+    FIRST) to the accumulated turn response and to the final round text.
+
+    The raw re-append is idempotent per surface (endswith check):
+
+    - Qwen cleanup path: round cleanup already replaced the raw text with
+      visible-only text (line 30088 ``full_response[:-len(round_response)] +
+      cleaned_round``) — the hidden markup is nowhere, so it is re-appended
+      before the pointer (the pointer says "thinking section above").
+    - Standard path: ``strip_tool_blocks`` PRESERVES think markup (it must
+      render in the thinking section on reload), so both surfaces already
+      end with the raw text — appending it again would duplicate it.
+    - Reasoning-channel turns: the thinking already lives in the persisted
+      thinking field and the raw text has no markup — pointer only.
+    """
+    _raw = str(round_response or "").strip()
+    _raw_needed = (
+        len(_raw) >= SILENT_TERMINATION_MIN_REASONING
+        and not _visible_response_text(_raw)
+    )
+
+    _full = str(full_response or "")
+    if _raw_needed and not _full.rstrip().endswith(_raw):
+        _full = (
+            _full.rstrip()
+            + ("\n\n" if _full.strip() else "")
+            + _raw
+            + "\n\n"
+            + pointer_message
+        )
+    else:
+        _full = (
+            _full.rstrip()
+            + ("\n\n" if _full.strip() else "")
+            + pointer_message
+        )
+
+    _round = str(round_text or "")
+    if _raw_needed and not _round.rstrip().endswith(_raw):
+        _round = (
+            _round.rstrip()
+            + ("\n\n" if _round.strip() else "")
+            + _raw
+            + "\n\n"
+            + pointer_message
+        )
+    else:
+        _round = (
+            _round.rstrip()
+            + ("\n\n" if _round.strip() else "")
+            + pointer_message
+        )
+    return _full, _round.strip()
+
+
 PLAN_MODE_DIRECTIVE = (
     "## PLAN MODE — OVERRIDES EVERYTHING ELSE BELOW\n"
     "You are in PLAN MODE. Your ONLY job this turn is to PROPOSE a plan. You have "
@@ -31304,7 +31367,7 @@ async def stream_agent_loop(
                 # think markup stripped by _visible_response_text, which would
                 # make the inline channel unmeasurable here.
                 _silent_termination_frame = silent_termination_warning(
-                    round_response, round_reasoning, [],
+                    round_response, round_reasoning, tool_blocks,
                     round_num=round_num,
                 )
                 if _silent_termination_frame:
@@ -31312,29 +31375,22 @@ async def stream_agent_loop(
                         _silent_termination_frame[len("data: "):-len("\n\n")]
                     )["message"]
                     # The pointer refers to the hidden output "in the thinking
-                    # section above". Round cleanup already replaced the raw
-                    # text with visible-only text in full_response/round_texts
-                    # (Qwen path), so re-append the hidden raw text first —
-                    # otherwise the pointer would reference output that is
-                    # nowhere in the persisted transcript on reload.
-                    _hidden_suffix = _silent_message
-                    _hidden_raw = str(round_response or "").strip()
-                    if (
-                        len(_hidden_raw) >= SILENT_TERMINATION_MIN_REASONING
-                        and not _visible_response_text(_hidden_raw)
-                    ):
-                        _hidden_suffix = _hidden_raw + "\n\n" + _silent_message
-                    full_response = (
-                        full_response.rstrip()
-                        + ("\n\n" if full_response.strip() else "")
-                        + _hidden_suffix
+                    # section above". silent_termination_persistence re-appends
+                    # the hidden raw round text FIRST — but only on surfaces
+                    # that round cleanup already stripped (Qwen path); on the
+                    # standard path both surfaces keep the markup (it renders
+                    # in the thinking section on reload) and re-appending it
+                    # would duplicate it.
+                    full_response, _silent_round_tail = (
+                        silent_termination_persistence(
+                            full_response,
+                            round_texts[-1] if round_texts else "",
+                            round_response,
+                            _silent_message,
+                        )
                     )
                     if round_texts:
-                        round_texts[-1] = (
-                            (round_texts[-1] or "").rstrip()
-                            + ("\n\n" if round_texts[-1].strip() else "")
-                            + _hidden_suffix
-                        ).strip()
+                        round_texts[-1] = _silent_round_tail
                     logger.warning(
                         "[agent] silent-termination guard fired on round %d "
                         "(final round: no tool call, empty visible content, "

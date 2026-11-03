@@ -32,6 +32,7 @@ import json
 # which sent _strip_think_blocks into an infinite .find() loop on the Mock.
 from src.agent_loop import (  # noqa: E402
     SILENT_TERMINATION_MIN_REASONING,
+    silent_termination_persistence,
     silent_termination_warning,
 )
 
@@ -146,3 +147,64 @@ def test_warning_frame_shape_and_reasoning_not_re_emitted():
     # visible prose (that would reproduce the transcript wall).
     assert reasoning not in frame
     assert len(payload["message"]) < 1000, "the warning is a pointer, not the answer"
+
+
+# ---------------------------------------------------------------------------
+# Persistence composition (pointer + hidden raw text, idempotent per surface)
+# ---------------------------------------------------------------------------
+
+def _thinking_mass():
+    return _THINK_OPEN + "hidden analysis" * 100 + _THINK_CLOSE
+
+
+def test_persistence_reappends_hidden_raw_when_surfaces_stripped():
+    """Qwen cleanup shape: round cleanup replaced the raw round text with
+    visible-only text in BOTH surfaces (empty here), so the hidden raw text
+    must be re-appended BEFORE the pointer on both — otherwise the pointer
+    references output that is nowhere on reload."""
+    hidden = _thinking_mass()
+    pointer = "pointer to the thinking section"
+    new_full, new_round = silent_termination_persistence(
+        full_response="earlier visible round text",
+        round_text="",
+        round_response=hidden,
+        pointer_message=pointer,
+    )
+    assert hidden in new_full
+    assert pointer in new_full
+    assert new_full.index(hidden) < new_full.index(pointer)
+    assert hidden in new_round
+    assert new_round.index(hidden) < new_round.index(pointer)
+
+
+def test_persistence_does_not_duplicate_hidden_raw_already_persisted():
+    """Standard path: both surfaces keep the raw think markup (strip_tool_blocks
+    preserves it so it renders in the thinking section on reload). Re-appending
+    would duplicate it — only the pointer is added, per surface, via endswith."""
+    hidden = _thinking_mass()
+    pointer = "pointer to the thinking section"
+    new_full, new_round = silent_termination_persistence(
+        full_response="earlier visible round text\n\n" + hidden,
+        round_text=hidden,
+        round_response=hidden,
+        pointer_message=pointer,
+    )
+    assert new_full.count(hidden) == 1
+    assert new_round.count(hidden) == 1
+    assert new_full.endswith(pointer)
+    assert new_round.endswith(pointer)
+
+
+def test_persistence_pointer_only_without_hidden_mass():
+    """Reasoning-channel shape: the thinking lives in the thinking field (already
+    persisted there) and the raw round text is empty — pointer only, on both
+    surfaces."""
+    pointer = "pointer to the thinking section"
+    new_full, new_round = silent_termination_persistence(
+        full_response="earlier visible round text",
+        round_text="",
+        round_response="   ",
+        pointer_message=pointer,
+    )
+    assert new_full == "earlier visible round text\n\n" + pointer
+    assert new_round == pointer
