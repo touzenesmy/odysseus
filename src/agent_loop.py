@@ -16923,16 +16923,16 @@ def _empty_response_fallback(
 
 
 # Backlog #12 (silent-termination detection): a final round can end with no
-# tool call, no visible content, and the complete answer written into the
-# reasoning stream (the 2026-10-28 20:11 EDT audit turn: 23.2K output tokens,
-# 208 chars visible, the 71K-char report only in thinking). The loop used to
-# break and the turn ended silently. Below this reasoning length a quiet
+# tool call, no visible content, and the complete answer written into its
+# thinking (the 2026-10-28 20:11 EDT audit turn: 23.2K output tokens, 208
+# chars visible, the 71K-char report only in thinking). The loop used to
+# break and the turn ended silently. Below this thinking length a quiet
 # reasoning-only final round is not treated as a silent termination.
 SILENT_TERMINATION_MIN_REASONING = 500
 
 
 def silent_termination_warning(
-    final_visible: str,
+    final_round_text: str,
     round_reasoning: str,
     final_round_tool_events: list,
     round_num: int | None = None,
@@ -16940,28 +16940,46 @@ def silent_termination_warning(
     """Detect a silent termination of the FINAL round and build its warning.
 
     A silent termination is: the final round made no tool call, produced no
-    visible content, and its reasoning stream is long (the answer was written
-    into thinking and never emitted as content). The caller yields the frame
-    and appends the pointer to the final response so the user sees WHERE the
-    output is instead of a silent, truncated reply.
+    visible content, and a large volume of its output stayed hidden in
+    thinking (the answer was written into thinking and never emitted as
+    content). The caller yields the frame and appends the pointer to the
+    final response so the user sees WHERE the output is instead of a silent,
+    truncated reply.
+
+    Thinking arrives through two channels and both are measured: the
+    reasoning_content field (``round_reasoning``) and inline think markup in
+    the content itself (the Qwen chat templates write the analysis inside
+    the round text — sometimes before an ORPHANED ``
+</think>
+`` closer
+    with the opener suppressed, which is why this branch also measures the
+    raw round text: at the point where visible text is empty, everything
+    still in the round text is, by definition, hidden model output).
 
     `final_round_tool_events` is the FINAL round's tool blocks, not the
     turn-wide list — earlier rounds' events must not suppress detection (the
     20:11 turn had 16 in prior rounds).
 
+    `final_round_text` is the RAW final round text (pass `round_response`,
+    not `cleaned_round` — on the Qwen paths the latter has already had its
+    inline think markup stripped, which would make the inline channel
+    unmeasurable). Visibility is re-derived below.
+
     Returns an SSE frame string, or None when the turn is not a silent
     termination (visible content present, short reasoning, or a tool call).
     """
-    if _visible_response_text(final_visible):
+    if _visible_response_text(final_round_text):
         return None
     if final_round_tool_events:
         return None
-    _reasoning_text = str(round_reasoning or "").strip()
-    if len(_reasoning_text) < SILENT_TERMINATION_MIN_REASONING:
+    _reasoning_len = len(str(round_reasoning or "").strip())
+    _raw_len = len(str(final_round_text or "").strip())
+    _thinking_len = max(_reasoning_len, _raw_len)
+    if _thinking_len < SILENT_TERMINATION_MIN_REASONING:
         return None
     _message = (
         "⚠️ This turn ended without a visible final answer — "
-        f"{len(_reasoning_text)} characters of the model's output stayed in "
+        f"{_thinking_len} characters of the model's output stayed in "
         "its thinking stream. That output is preserved in the thinking "
         "section above this message."
     )
@@ -31281,30 +31299,49 @@ async def stream_agent_loop(
                 # pointer to the thinking section instead of ending silently.
                 # Detection is final-round-scoped on purpose: earlier rounds'
                 # tool events must not suppress it (the 20:11 turn had 16).
+                # Pass the RAW round text (round_response), not cleaned_round:
+                # on the Qwen paths cleaned_round has already had its inline
+                # think markup stripped by _visible_response_text, which would
+                # make the inline channel unmeasurable here.
                 _silent_termination_frame = silent_termination_warning(
-                    cleaned_round, round_reasoning, [],
+                    round_response, round_reasoning, [],
                     round_num=round_num,
                 )
                 if _silent_termination_frame:
                     _silent_message = json.loads(
                         _silent_termination_frame[len("data: "):-len("\n\n")]
                     )["message"]
+                    # The pointer refers to the hidden output "in the thinking
+                    # section above". Round cleanup already replaced the raw
+                    # text with visible-only text in full_response/round_texts
+                    # (Qwen path), so re-append the hidden raw text first —
+                    # otherwise the pointer would reference output that is
+                    # nowhere in the persisted transcript on reload.
+                    _hidden_suffix = _silent_message
+                    _hidden_raw = str(round_response or "").strip()
+                    if (
+                        len(_hidden_raw) >= SILENT_TERMINATION_MIN_REASONING
+                        and not _visible_response_text(_hidden_raw)
+                    ):
+                        _hidden_suffix = _hidden_raw + "\n\n" + _silent_message
                     full_response = (
                         full_response.rstrip()
                         + ("\n\n" if full_response.strip() else "")
-                        + _silent_message
+                        + _hidden_suffix
                     )
                     if round_texts:
                         round_texts[-1] = (
                             (round_texts[-1] or "").rstrip()
-                            + "\n\n" + _silent_message
+                            + ("\n\n" if round_texts[-1].strip() else "")
+                            + _hidden_suffix
                         ).strip()
                     logger.warning(
                         "[agent] silent-termination guard fired on round %d "
                         "(final round: no tool call, empty visible content, "
-                        "%d chars of reasoning)",
+                        "%d chars of reasoning, %d chars raw round text)",
                         round_num,
                         len(str(round_reasoning or "")),
+                        len(str(round_response or "")),
                     )
                     yield _silent_termination_frame
                     # The warning frame is a log/persistence marker; the chat

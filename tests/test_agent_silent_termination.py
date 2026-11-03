@@ -8,8 +8,10 @@ silently: no error, no retry, no warning frame. The 71K-char report lives
 only in the persisted thinking field.
 
 Fix (detection only, ROADMAP #12 plan steps c/d): when the FINAL round has no
-tool call, empty visible content, and a long reasoning field, emit a visible
-warning frame before the loop breaks — instead of ending silently. The answer
+tool call, empty visible content, and a large volume of thinking — in the
+reasoning_content field OR in inline think markup inside the round text (Qwen
+chat templates write the analysis in the content stream) — emit a visible
+warning frame before the loop breaks, instead of ending silently. The answer
 is NOT moved into the bubble (that would reproduce the transcript wall); the
 user is told where it is (the thinking section).
 
@@ -33,6 +35,12 @@ from src.agent_loop import (  # noqa: E402
     silent_termination_warning,
 )
 
+# The think-markup tags are built from \u003c/\u003e escapes so the raw tag
+# text never appears in this source file — the file tooling mangles raw tags
+# (splits them across lines, which is a SyntaxError in single-line literals).
+_THINK_OPEN = "\u003cthink\u003e"
+_THINK_CLOSE = "\u003c/think\u003e"
+
 # ---------------------------------------------------------------------------
 # Detection predicate
 # ---------------------------------------------------------------------------
@@ -40,7 +48,7 @@ from src.agent_loop import (  # noqa: E402
 def test_silent_termination_detected_on_long_reasoning_empty_content():
     """The 20:11 shape: final round with no visible answer and long thinking."""
     warning = silent_termination_warning(
-        final_visible="",
+        final_round_text="",
         round_reasoning="x" * 2000,
         final_round_tool_events=[],
     )
@@ -51,7 +59,7 @@ def test_silent_termination_detected_on_long_reasoning_empty_content():
 def test_no_warning_when_final_visible_content_present():
     """A real final answer suppresses the warning even with long thinking."""
     warning = silent_termination_warning(
-        final_visible="Here is the audit report you asked for.",
+        final_round_text="Here is the audit report you asked for.",
         round_reasoning="x" * 2000,
         final_round_tool_events=[],
     )
@@ -61,7 +69,7 @@ def test_no_warning_when_final_visible_content_present():
 def test_no_warning_below_reasoning_threshold():
     """Short thinking is a normal quiet turn, not a silent termination."""
     warning = silent_termination_warning(
-        final_visible="",
+        final_round_text="",
         round_reasoning="x" * (SILENT_TERMINATION_MIN_REASONING - 1),
         final_round_tool_events=[],
     )
@@ -72,11 +80,44 @@ def test_no_warning_when_final_round_has_tool_call():
     """A final round that called a tool is not a silent termination — the
     tool path owns its own completion/failure semantics."""
     warning = silent_termination_warning(
-        final_visible="",
+        final_round_text="",
         round_reasoning="x" * 2000,
         final_round_tool_events=[{"tool": "host_shell", "output": "ok"}],
     )
     assert warning is None
+
+
+# ---------------------------------------------------------------------------
+# Inline think markup (Qwen chat templates)
+# ---------------------------------------------------------------------------
+
+def test_silent_termination_detected_on_inline_think_blocks():
+    """The Qwen finetunes write thinking INSIDE the content stream, so
+    ``round_reasoning`` (the reasoning_content channel) stays empty. The
+    answer still lives in the think markup and the turn still ends silently
+    — the guard must measure the inline channel too."""
+    inline = _THINK_OPEN + "analysis that never became visible" * 40 + _THINK_CLOSE
+    warning = silent_termination_warning(
+        final_round_text=inline,
+        round_reasoning="",
+        final_round_tool_events=[],
+    )
+    assert warning is not None
+    assert "thinking" in warning.lower()
+
+
+def test_silent_termination_detected_on_orphaned_closer_analysis():
+    """Some local Qwen chat templates suppress the opening think tag while
+    still emitting the closer — the analysis before the ORPHANED closer is
+    hidden output (``_visible_response_text`` drops it), with nothing visible
+    after it. That shape is a silent termination too."""
+    orphaned = "orphaned analysis before the closer" * 40 + _THINK_CLOSE
+    warning = silent_termination_warning(
+        final_round_text=orphaned,
+        round_reasoning="",
+        final_round_tool_events=[],
+    )
+    assert warning is not None
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +134,7 @@ def _parse_sse_frame(frame):
 def test_warning_frame_shape_and_reasoning_not_re_emitted():
     reasoning = "The full audit report that never became visible text." * 20
     frame = silent_termination_warning(
-        final_visible="",
+        final_round_text="",
         round_reasoning=reasoning,
         final_round_tool_events=[],
     )
