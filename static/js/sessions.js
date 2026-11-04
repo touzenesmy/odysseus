@@ -1925,10 +1925,7 @@ export async function loadSessions() {
     // most recently appended a message.
     const _isTransient = (s) => !!s && (s.folder === 'Assistant' || s.folder === 'Tasks' || _isUnsavedCompareSession(s));
     const _realSessions = activeSessions.filter(s => !_isTransient(s));
-    let hashId = window.location.hash.replace('#', '');
-    if (/^(document|note|image|email|event|task|skill|research)-/.test(hashId) || /^open=notes&note=/.test(hashId)) {
-      hashId = '';
-    }
+    let hashId = sessionHashId(window.location.hash);
     const _isFirstLoad = !sessionStorage.getItem('ody-session-active');
     const _freshRootLoad = !_rootFreshChatApplied && !hashId && !currentSessionId && !_pendingChat;
     if (_freshRootLoad) {
@@ -2813,12 +2810,10 @@ export function initDragSort() {
 // by their own click handlers in chatRenderer.js and must not trigger
 // session navigation (which would reset the active chat).
 window.addEventListener('hashchange', () => {
-  const hashId = window.location.hash.replace('#', '');
-  if (/^(document|note|image|email|event|task|skill|research)-/.test(hashId) || /^open=notes&note=/.test(hashId)) return;
-  if (hashId && hashId !== currentSessionId) {
-    const target = sessions.find(s => s.id === hashId && !s.archived);
-    if (target) selectSession(hashId);
-  }
+  const hashId = sessionHashId(window.location.hash);
+  if (!hashId || hashId === currentSessionId) return;
+  const target = sessions.find(s => s.id === hashId && !s.archived);
+  if (target) selectSession(hashId);
 });
 
 // ── Research indicator management ──
@@ -3952,9 +3947,25 @@ export function setSessionHasDocs(sessionId, hasDocs) {
   }
 }
 
+// Normalize a `#…` hash (or bare token) into the session id it should
+// resolve to, or '' when the hash targets another entity (document/note/…).
+// The agent emits session links as `#session-<id>` (see the agent_loop.py
+// link convention + create_session result rendering) while in-app hashes are
+// bare ids; both must resolve to the same exact-match id. The `session-`
+// prefix is only stripped as a full leading token.
+export function sessionHashId(hash) {
+  let h = String(hash || '').replace(/^#/, '').trim();
+  if (!h) return '';
+  if (/^(document|note|image|email|event|task|skill|research)-/.test(h) || /^open=notes&note=/.test(h)) return '';
+  if (/^session-/.test(h)) h = h.slice('session-'.length);
+  return h;
+}
+// END_SESSION_HASH_ID
+
 // Export all functions to window for use in main app
 const sessionModule = {
   initDependencies,
+  sessionHashId,
   renderSessionList,
   loadSessions,
   selectSession,

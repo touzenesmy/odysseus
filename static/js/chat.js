@@ -959,7 +959,9 @@ import { invalidateSettings } from './appConfig.js';
       const hashId = String(window.location.hash || '').replace(/^#/, '').trim();
       if (!hashId) return '';
       if (/^(document|note|image|email|event|task|skill|research)-/.test(hashId) || /^open=notes&note=/.test(hashId)) return '';
-      return hashId;
+      // Normalize the `session-` prefix before the exact id match: the agent
+      // emits #session-<id> links, and session ids never contain that prefix.
+      return (sessionModule.sessionHashId ? sessionModule.sessionHashId(hashId) : hashId) || '';
     } catch (_) {
       return '';
     }
