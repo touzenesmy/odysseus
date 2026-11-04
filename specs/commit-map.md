@@ -253,3 +253,6 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `01809b70` — docs(specs): commit-map — backfill 23dc007e row (keep-current: only HEAD unlisted)
 - `dc716038` — docs(specs): commit-map — backfill row
 - `4673448d` — docs(specs): commit-map — backfill row
+- `daba75a3` — docs(specs): commit-map — batch-backfill remaining rows (keep-current: only HEAD unlisted)
+- `3a78f07f` — docs(specs): ROADMAP — Backlog #14 logged (full-branch code review, 5-commit batches B01–B37)
+- `a17915c8` — fix(ui): resolve #session-<id> deep links (agent link convention was never stripped; Backlog #15, TDD 5/5, node --check clean)
