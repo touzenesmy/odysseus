@@ -2,15 +2,17 @@
 set -euo pipefail
 BRANCH="ImprovementsDev"
 PR_NUM=""
-# Auto-detect compose file: prefer baremetal, then GPU variants, fall back to default
+# Auto-detect compose file: prefer baremetal, then GPU variants, fall back to default.
+# Named COMPOSE_F (not COMPOSE_FILE) to avoid shadowing Docker Compose's own
+# COMPOSE_FILE environment variable.
 for CF in docker-compose-baremetal.samy docker-compose.gpu-amd.yml docker-compose.gpu-nvidia.yml docker-compose.yml; do
     if [[ -f "$CF" ]]; then
-        COMPOSE_FILE="$CF"
+        COMPOSE_F="$CF"
         break
     fi
 done
 
-if [[ -z "${COMPOSE_FILE:-}" ]]; then
+if [[ -z "${COMPOSE_F:-}" ]]; then
     echo ">> Error: No docker-compose file found (tried baremetal, gpu-amd, gpu-nvidia, default)" >&2
     exit 1
 fi
@@ -110,10 +112,23 @@ else
 fi
 
 echo ">> Pulling latest container images..."
-docker compose -f "$COMPOSE_FILE" pull
+docker compose -f "$COMPOSE_F" pull
+
+# If any step between stop and start fails, set -e aborts the script; the ERR
+# trap brings the service back up so a failed update never leaves it stopped.
+SERVICE_DOWN=0
+restore_service() {
+    [[ "$SERVICE_DOWN" == 1 ]] || return 0
+    echo ">> A step failed before restart — bringing $SERVICE back up." >&2
+    if ! sudo systemctl start "$SERVICE"; then
+        echo "!! $SERVICE is DOWN and the automatic restart failed. Run: sudo systemctl start $SERVICE" >&2
+    fi
+}
+trap restore_service ERR
 
 echo ">> Restarting Odysseus..."
 sudo systemctl stop "$SERVICE"
+SERVICE_DOWN=1
 echo ">> Checking system dependencies for Python builds..."
 if command -v apt-get &>/dev/null; then
     BUILD_DEPS="python3-venv python3-dev build-essential libssl-dev libffi-dev"
@@ -133,6 +148,13 @@ source venv/bin/activate
 pip install -r requirements.txt
 deactivate
 sudo systemctl start "$SERVICE"
+SERVICE_DOWN=0
+trap - ERR
 
 echo ">> Updated. Logs: journalctl -u $SERVICE -f"
-journalctl -u odysseus.service -f
+# Default: exit 0 so the deploy's exit status is honest (this script used to
+# end in an infinite journal tail and mask it). FOLLOW=1 restores the live tail:
+#   FOLLOW=1 ./update.sh
+if [[ "${FOLLOW:-0}" == "1" ]]; then
+    journalctl -u "$SERVICE" -f
+fi
