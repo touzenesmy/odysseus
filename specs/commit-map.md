@@ -257,3 +257,17 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `3a78f07f` — docs(specs): ROADMAP — Backlog #14 logged (full-branch code review, 5-commit batches B01–B37)
 - `a17915c8` — fix(ui): resolve #session-<id> deep links (agent link convention was never stripped; Backlog #15, TDD 5/5, node --check clean)
 - `2eda1c28` — docs(specs): ROADMAP #15 entry + status + commit-map backfill (daba75a3, 3a78f07f, a17915c8; keep-current restored)
+- `a374a5da` — docs(specs): ROADMAP — #15 second pass (reopened, zero-message deep-link gap) + Backlog #16 logged + commit-map backfill
+- `2a3bdb46` — docs(specs): ROADMAP #14 — B01 reviewed 5/5 OK (1/37) + B38 pending note
+- `3e740233` — fix(deploy): update.sh — B01 review fixes (F1 ERR-trap service restore, F2 honest exit + FOLLOW=1 tail gate, F3 COMPOSE_F rename)
+- `b92206aa` — docs(specs): ROADMAP #14 — B01 finding: merge-base precision fix + second-pass findings F1–F5 (fixes in 3e740233)
+- `efa75f1b` — docs(specs): ROADMAP #14 — B02 reviewed 5/5 OK (2/37)
+- `24d17b39` — docs(specs): ROADMAP #14 — B02 finding precision: 58e5ada5 also adds new 'moonshot-v1' key (re-review)
+- `dcc828b7` — docs(specs): ROADMAP #14 — B03 reviewed: 4 OK, 1 latent issue (99614580 undeclared _lastTargetHeight, fixed by B04 918d9e94)
+- `0fdab570` — docs(specs): ROADMAP #14 — B04 reviewed 4 OK + 1 issue (setup.sh readiness probe list unsatisfiable on fresh installs; survives to HEAD) (4/37, 20/181)
+- `5f971166` — docs(specs): ROADMAP #14 — B05 reviewed 5 OK + 2 info (5/37, 25/181)
+- `0586b044` — docs(specs): ROADMAP #14 — B06 reviewed 5/5 OK + 2 info (6/37, 30/181)
+- `c5992213` — docs(specs): ROADMAP #14 — B07 reviewed 5 OK + 3 info (7/37, 35/181)
+- `59ee7fc4` — docs(specs): ROADMAP #14 — B08 reviewed 5 OK + 2 info + 1 docs issue (#14-B08) (8/37, 40/181)
+- `1d5b4919` — docs(specs): ROADMAP #14 — B09 (5 OK + 3 info + 1 transient #14-B09, self-fixed in-batch) + B10 (5 OK + 4 info, no open issues) reviewed (10/37, 50/181)
+- `bb36f8cc` — docs(specs): ROADMAP #14 — B09 finding precision: compare-strip line ref 3533 (not 3540–3545, which is the broader _compare_strip set) (re-review)
