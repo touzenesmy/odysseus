@@ -271,3 +271,8 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `59ee7fc4` — docs(specs): ROADMAP #14 — B08 reviewed 5 OK + 2 info + 1 docs issue (#14-B08) (8/37, 40/181)
 - `1d5b4919` — docs(specs): ROADMAP #14 — B09 (5 OK + 3 info + 1 transient #14-B09, self-fixed in-batch) + B10 (5 OK + 4 info, no open issues) reviewed (10/37, 50/181)
 - `bb36f8cc` — docs(specs): ROADMAP #14 — B09 finding precision: compare-strip line ref 3533 (not 3540–3545, which is the broader _compare_strip set) (re-review)
+- `6aa1c3e4` — docs(specs): ROADMAP #14 — B10 re-verification loop: note's latent edge retracted (false positive), all claims hold
+- `703ebfce` — docs(specs): commit-map — backfill 14 rows a374a5da→bb36f8cc (restores keep-current)
+- `10b8e225` — docs(specs): ROADMAP #14 — B10 second re-verification round: 2 new pre-existing findings (#14-B10a queued-bubble host breaks deleteMessage flat sweep, #14-B10b mid-stream delete sweeps un-stamped holder)
+- `62d6aa0d` — docs(specs): ROADMAP #14 — B11 reviewed: 4 OK + 1 real defect (VAD streaming utterance audio spliced — fixed in-range by B13 3f57578f) (11/37, 55/181)
+- `53dcb9b0` — docs(specs): ROADMAP #14 — B12 reviewed: 4 OK + 1 real defect (353d0e3e shipped an unparseable chat.js; self-healed by be45b649) (12/37, 60/181)
