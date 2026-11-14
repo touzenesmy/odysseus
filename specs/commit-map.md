@@ -242,6 +242,7 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `51634960` — docs(specs): ROADMAP — #12 double-check + fix 2d031991 (live-bubble pointer via delta) + commit-map backfill e7b195e8
 - `a9cc0abe` — docs(specs): commit-map — backfill 2d031991 row (self-row omitted by keep-current rule)
 - `a80a2d37` — docs(specs): commit-map — backfill 51634960 row (self-row omitted by keep-current rule)
+- `e523d1b4` — docs(specs): commit-map — backfill a9cc0abe + a80a2d37 rows (restores keep-current: only HEAD unlisted) (self-row missed; backfilled here)
 - `5a041cba` — fix(agent): silent-termination guard measures the inline think channel (Qwen path) + persists hidden raw text before the pointer (Backlog #12; TDD 7/7, focused net 140 passed)
 - `5153c22a` — docs(specs): ROADMAP — #12 third pass: inline think channel (Qwen) at 5a041cba + status + #12 entry + commit-map row
 - `49fd3959` — fix(agent): silent-termination persistence idempotent per surface — standard path keeps the think markup (strip_tool_blocks preserves it), so the 5a041cba raw re-append duplicated it; extracted silent_termination_persistence() with per-surface endswith check + real tool_blocks at call site (Backlog #12 fourth pass; TDD 10/10, focused net 143 passed)
@@ -276,5 +277,8 @@ ABANDON (5, superseded within Scaffold — never ported): `2236c70e 95422d48 290
 - `10b8e225` — docs(specs): ROADMAP #14 — B10 second re-verification round: 2 new pre-existing findings (#14-B10a queued-bubble host breaks deleteMessage flat sweep, #14-B10b mid-stream delete sweeps un-stamped holder)
 - `62d6aa0d` — docs(specs): ROADMAP #14 — B11 reviewed: 4 OK + 1 real defect (VAD streaming utterance audio spliced — fixed in-range by B13 3f57578f) (11/37, 55/181)
 - `53dcb9b0` — docs(specs): ROADMAP #14 — B12 reviewed: 4 OK + 1 real defect (353d0e3e shipped an unparseable chat.js; self-healed by be45b649) (12/37, 60/181)
+- `aca7c0b4` — docs(specs): ROADMAP #14 — B13 reviewed: 4 OK + 1 real defect (the batch's own headline — 3f57578f fixes B11's splice defect, empirically proven at every SHA) (13/37, 65/181)
+- `2f8ff507` — docs(specs): ROADMAP — Backlog #17 LOGGED + root-caused (final-bubble fence loss on local-model agent turns; repro row f139ebc2, fix pending TDD)
 - `04ac2f2d` — fix(history): order pages by (timestamp, id) so OFFSET pagination tiles the transcript (dev-only, pager review — /api/history paginated branch sorted on the tie-prone DateTime alone, so OFFSET pages could duplicate/skip same-second rows; TDD red→green with a page-tiling regression test; focused net 67 passed)
 - `fd7a798d` — fix(ui): measure pager height delta after the page resolves, before rendering (dev-only, pager review — pre-fetch height baseline credited stream frames to the prepend, viewport jumped on page load; new node harness 5/5, mutation matrix: both known-bad placements red, fixed placement only green)
+- `57213bf8` — docs(specs): ROADMAP — pager review → 2 dev-only fixes (04ac2f2d + fd7a798d) + commit-map rows
