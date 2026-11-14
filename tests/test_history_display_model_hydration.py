@@ -140,6 +140,100 @@ def test_paginated_history_reads_only_count_and_requested_page(monkeypatch):
     assert sum("count(" in statement for statement in chat_selects) == 1
 
 
+def test_paginated_history_orders_by_stable_total_order(monkeypatch):
+    """Offset pagination is only safe under a deterministic total order.
+
+    ``chat_messages.timestamp`` is a ``DateTime`` and several rows routinely
+    share one value (bulk inserts, imports, migrations, or a fast agent round
+    persisting user + assistant rows in the same instant). ``ORDER BY
+    timestamp`` alone leaves the tie order to SQLite's scan plan, so OFFSET
+    pages can duplicate or skip rows. The page query must pin the tie with a
+    unique column so every row lands in exactly one page.
+    """
+    engine, db_factory = _database()
+    db = db_factory()
+    try:
+        db.add(
+            DbSession(
+                id="session-1",
+                name="Tied chat",
+                endpoint_url="http://model.test/v1",
+                model="test-model",
+                owner="alice",
+                message_count=6,
+            )
+        )
+        # All six rows share one timestamp: the worst case for tie ordering.
+        tied = datetime(2026, 1, 1, 12, 0, 0)
+        for index in range(6):
+            db.add(
+                DbChatMessage(
+                    id=f"message-{index}",
+                    session_id="session-1",
+                    role="user" if index % 2 == 0 else "assistant",
+                    content=f"content-{index}",
+                    timestamp=tied,
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    monkeypatch.setattr(history_routes, "SessionLocal", db_factory)
+    monkeypatch.setattr(history_routes, "_verify_session_owner", lambda *_args: None)
+    app = FastAPI()
+    app.include_router(history_routes.setup_history_routes(None))
+
+    statements = []
+
+    def capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture_sql)
+    try:
+        client = TestClient(app)
+        # Walk the pages the way the UI pager does: tail first (server picks
+        # the offset), then step back by `limit` until has_more_before clears.
+        pages = []
+        response = client.get("/api/history/session-1?limit=2")
+        assert response.status_code == 200
+        page = response.json()
+        pages.append(page)
+        while page["has_more_before"]:
+            response = client.get(
+                f"/api/history/session-1?limit=2&offset={page['offset'] - 2}"
+            )
+            assert response.status_code == 200
+            page = response.json()
+            pages.append(page)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_sql)
+        engine.dispose()
+
+    # Invariant 1: the pages tile the transcript — every row once, none lost.
+    seen = [
+        message["content"]
+        for page in pages
+        for message in page["history"]
+    ]
+    assert sorted(seen) == [f"content-{i}" for i in range(6)]
+    assert len(pages) == 3
+
+    # Invariant 2: each page read is ordered by a total order — the unique
+    # row id must break the timestamp tie, not just ORDER BY timestamp.
+    page_selects = [
+        statement
+        for statement in _chat_message_selects(statements)
+        if "limit" in statement.lower()
+    ]
+    assert len(page_selects) == 3, page_selects
+    for statement in page_selects:
+        order_by = statement[statement.lower().rindex("order by") + 8 :].strip()
+        assert "chat_messages.id" in order_by.lower(), (
+            f"page order must break timestamp ties with the row id: {statement}"
+        )
+
+
 def test_production_router_order_reaches_bounded_canonical_history(monkeypatch):
     """The assembled app must not shadow canonical history with session routes."""
     engine, db_factory = _database()

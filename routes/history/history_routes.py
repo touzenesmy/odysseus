@@ -323,7 +323,13 @@ def setup_history_routes(session_manager, upload_handler=None) -> APIRouter:
                 rows = (
                     db.query(DbChatMessage)
                     .filter(DbChatMessage.session_id == session_id)
-                    .order_by(DbChatMessage.timestamp)
+                    # Timestamps are DateTime (ties are possible — bulk
+                    # inserts, imports, one agent round persisted in the same
+                    # instant), so OFFSET pagination needs a total order.
+                    # The row id breaks the tie deterministically and keeps
+                    # pages disjoint; the (session_id, timestamp) index still
+                    # serves the range, with the id as the cheap tie sort.
+                    .order_by(DbChatMessage.timestamp, DbChatMessage.id)
                     .offset(page_offset)
                     .limit(page_limit)
                     .all()
