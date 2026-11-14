@@ -273,11 +273,16 @@ function _installHistoryPager(id, pageInfo, modelName) {
 
     _historyPager.loading = true;
     const anchor = box.querySelector('.msg, .agent-thread, .gallery-bubble');
-    const beforeHeight = box.scrollHeight;
     try {
       const res = await fetch(_historyUrl(_historyPager.sessionId, { limit: nextLimit, offset: nextOffset }));
       const data = await res.json();
       if (!_historyPager || _historyPager.sessionId !== currentSessionId) return;
+      // Measure after the await (stream growth during the request must not be
+      // credited to the prepend — it would push the viewport past the anchor
+      // the user was reading) but BEFORE the render loop: the renderer appends
+      // each bubble to the end of the box, so a later measure would include
+      // the new page and the height delta would collapse to zero.
+      const beforeHeight = box.scrollHeight;
       const newEls = [];
       for (const msg of data.history || []) {
         if (msg.role !== 'user' && msg.role !== 'assistant') continue;
@@ -292,8 +297,7 @@ function _installHistoryPager(id, pageInfo, modelName) {
       if (window.hljs) {
         newEls.forEach(el => el.querySelectorAll('pre code:not(.hljs)').forEach(block => window.hljs.highlightElement(block)));
       }
-      const heightDelta = box.scrollHeight - beforeHeight;
-      box.scrollTop += heightDelta;
+      box.scrollTop += box.scrollHeight - beforeHeight;
     } catch (e) {
       console.warn('Failed to load older chat history:', e);
     } finally {
