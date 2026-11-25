@@ -6241,7 +6241,17 @@ import { invalidateSettings } from './appConfig.js';
         cache: 'no-store',
       });
       if (!_getForegroundStreamState() || _backgroundStreams.has(sid)) return;
-      if (res.status !== 404) {
+      // Ported from upstream 76ab7241/871c0c06: the server may report "no
+      // active stream" as 200 {status:"idle"} (upstream contract) or 404
+      // (ours); a body with status "streaming" means the run is NOT stale.
+      // A non-404 error response is not proof of idleness, so ignore it; an
+      // ok-but-unparseable body is treated as still streaming (conservative).
+      if (res.status !== 404 && !res.ok) return;
+      let _probe = null;
+      try { _probe = await res.json(); } catch (_) { _probe = null; }
+      const _probeStreaming = !!_probe &&
+        typeof _probe.status === 'string' && _probe.status === 'streaming';
+      if (res.status !== 404 && (_probe === null || _probeStreaming)) {
         // Server run still active: the local reader froze (e.g. the phone
         // locked mid-generation) but the run is still generating DETACHED
         // server-side. Aborting here rendered "[Cancelled by user]" on turns
