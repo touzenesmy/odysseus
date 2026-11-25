@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-BRANCH="ImprovementsDev"
+BRANCH="${BRANCH:-$(cd "$(dirname "$0")" && git branch --show-current || true)}"
 PR_NUM=""
 # Auto-detect compose file: prefer baremetal, then GPU variants, fall back to default.
 # Named COMPOSE_F (not COMPOSE_FILE) to avoid shadowing Docker Compose's own
