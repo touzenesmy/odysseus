@@ -9,6 +9,43 @@ search:
     - json
 
 engines:
+  # Built-in stock engines for the Chinese/Russian search sites. The pinned
+  # searxng image (2026.9.25-12f8b6515) ships searx/engines/baidu.py and
+  # searx/engines/yandex.py. Enable them per-category:
+  - name: baidu
+    engine: baidu
+    category: general
+    shortcut: bdx
+    disabled: false
+
+  - name: yandex
+    engine: yandex
+    category: general
+    shortcut: ydx
+    disabled: false
+
+  # FlareSolverr-backed fallbacks (real browser, better at clearing
+  # SmartCaptcha / 百度安全验证 challenges that kill the stock engines).
+  # Route the query through a FlareSolverr instance, then parse the HTML.
+  # Disabled by default — enable when a stock engine is CAPTCHA-blocked.
+  - name: yandexfs
+    engine: flaresolverr_engines
+    site: yandex
+    flaresolverr_url: http://odysseus-flaresolverr:8191/v1
+    shortcut: yxfs
+    timeout: 35.0
+    enable_http: true
+    disabled: true
+
+  - name: baidufs
+    engine: flaresolverr_engines
+    site: baidu
+    flaresolverr_url: http://odysseus-flaresolverr:8191/v1
+    shortcut: bdfs
+    timeout: 35.0
+    enable_http: true
+    disabled: true
+
   # Custom FlareSolverr-backed engines (ddg/brave/bing). These route each query
   # through a FlareSolverr browser (real headless Chrome) to bypass IP/CAPTCHA
   # blocks that kill the stock engines on some hosts. They are DISABLED by

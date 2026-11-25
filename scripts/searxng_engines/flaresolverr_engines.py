@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""FlareSolverr-backed search engines (DDG, Brave, Bing).
+"""FlareSolverr-backed search engines (DDG, Brave, Bing, Yandex, Baidu).
 
 Routes the search through a FlareSolverr instance (real browser, solves
 challenges), then parses the returned HTML with lxml.
@@ -42,6 +42,26 @@ SITES = {
         "url_xpath": ".//h2/a/@href",
         "title_xpath": ".//h2/a",
         "content_xpath": ".//div[contains(@class,'b_caption')]//p | .//p",
+    },
+    # Yandex: results live in per-result containers; anchors carry
+    # data-type="main-result". SmartCaptcha may appear for flagged IPs.
+    "yandex": {
+        "url": "https://yandex.com/search/?text={q}",
+        "results_xpath": "//div[contains(@class,'searchResult')] | //li[contains(@class,'main') and contains(@class,'Container')]",
+        "url_xpath": ".//a[contains(@data-type,'main-result')]/@href | .//a[contains(@class,'Link')][1]/@href",
+        "title_xpath": ".//a[contains(@data-type,'main-result')] | .//a[contains(@class,'Link')][1]",
+        "content_xpath": ".//*[contains(@class,'Description')] | .//*[contains(@class,'Text')]",
+    },
+    # Baidu: result blocks are div.c-container; the title anchor usually
+    # carries the real destination in its `mu` attribute (href is a
+    # baidu.com/link?url=... redirect).
+    "baidu": {
+        "url": "https://www.baidu.com/s?wd={q}",
+        "results_xpath": "//div[contains(@class,'c-container')]",
+        "url_xpath": "(.//h3[contains(@class,'c-title')]/a)[1]/@href",
+        "mu_xpath": "(.//h3[contains(@class,'c-title')]/a)[1]/@mu",
+        "title_xpath": "(.//h3[contains(@class,'c-title')]/a)[1]",
+        "content_xpath": ".//div[contains(@class,'c-abstract')] | .//*[contains(@class,'content-right')] | .//*[contains(@class,'c-color-text')]",
     },
 }
 
@@ -104,6 +124,11 @@ def response(resp):
         if not urls or not titles:
             continue
         url = urls[0]
+        # Prefer the anchor's `mu` attribute (real destination) when present.
+        if cfg.get("mu_xpath"):
+            mus = node.xpath(cfg["mu_xpath"])
+            if mus and mus[0]:
+                url = mus[0]
         title = _text(titles[0])
         if not title:
             continue
