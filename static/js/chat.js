@@ -6249,9 +6249,13 @@ import { invalidateSettings } from './appConfig.js';
       if (res.status !== 404 && !res.ok) return;
       let _probe = null;
       try { _probe = await res.json(); } catch (_) { _probe = null; }
+      if (res.status !== 404 && _probe === null) {
+        // A malformed 200 body is not proof of idleness: keep local state.
+        return;
+      }
       const _probeStreaming = !!_probe &&
         typeof _probe.status === 'string' && _probe.status === 'streaming';
-      if (res.status !== 404 && (_probe === null || _probeStreaming)) {
+      if (res.status !== 404 && _probeStreaming) {
         // Server run still active: the local reader froze (e.g. the phone
         // locked mid-generation) but the run is still generating DETACHED
         // server-side. Aborting here rendered "[Cancelled by user]" on turns
