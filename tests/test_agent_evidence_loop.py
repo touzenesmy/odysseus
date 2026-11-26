@@ -332,6 +332,83 @@ def test_terminal_artifact_task_repairs_after_consecutive_failed_batches(monkeyp
     assert decision["can_complete"] is True
 
 
+def test_distinct_failed_batches_do_not_force_final_answer(monkeypatch):
+    """Regression: two consecutive but DISTINCT failing calls (the agent is
+    adapting) must not trip the consecutive-failures breaker in a plain
+    non-terminal chat session (limit 2)."""
+    executed = []
+    _patch_loop(
+        monkeypatch,
+        [
+            "<tool_call><invoke name=\"python\"><parameter name=\"code\">print(missing_one)</parameter></invoke></tool_call>",
+            "<tool_call><invoke name=\"python\"><parameter name=\"code\">print(missing_two)</parameter></invoke></tool_call>",
+            "<tool_call><invoke name=\"python\"><parameter name=\"code\">print(\"recovered\")</parameter></invoke></tool_call>",
+            "Recovered on the third attempt.",
+        ],
+    )
+
+    async def execute(block, *args, **kwargs):
+        executed.append((block.tool_type, block.content))
+        if "missing" in block.content:
+            return block.tool_type, {
+                "error": f"NameError from {block.content}",
+                "exit_code": 1,
+            }
+        return block.tool_type, {"output": "recovered", "exit_code": 0}
+
+    monkeypatch.setattr(agent_loop, "execute_tool_block", authoritative_executor(execute))
+
+    events = _run(
+        "Probe twice, then recover",
+        max_rounds=6,
+        relevant_tools={"python"},
+        runtime_context={"surface": "web"},
+    )
+
+    assert not any(
+        event.get("type") == "loop_breaker_triggered"
+        and event.get("reason") == "consecutive_tool_failures"
+        for event in events
+    )
+    assert len(executed) == 3
+
+
+def test_blind_retry_failed_batches_force_final_answer(monkeypatch):
+    """The same exact call failing twice in a row is a blind retry: the
+    breaker still forces a final answer at the configured limit."""
+    executed = []
+    _patch_loop(
+        monkeypatch,
+        [
+            "<tool_call><invoke name=\"python\"><parameter name=\"code\">print(missing)</parameter></invoke></tool_call>",
+            "<tool_call><invoke name=\"python\"><parameter name=\"code\">print(missing)</parameter></invoke></tool_call>",
+            "Giving up.",
+        ],
+    )
+
+    async def execute(block, *args, **kwargs):
+        executed.append((block.tool_type, block.content))
+        return block.tool_type, {
+            "error": f"NameError from {block.content}",
+            "exit_code": 1,
+        }
+
+    monkeypatch.setattr(agent_loop, "execute_tool_block", authoritative_executor(execute))
+
+    events = _run(
+        "Retry the same broken call",
+        max_rounds=6,
+        relevant_tools={"python"},
+        runtime_context={"surface": "web"},
+    )
+
+    assert any(
+        event.get("type") == "loop_breaker_triggered"
+        and event.get("reason") == "consecutive_tool_failures"
+        for event in events
+    )
+
+
 def test_varied_failed_artifact_mutations_have_cumulative_cap(monkeypatch):
     executed = []
     _patch_loop(

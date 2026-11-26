@@ -24949,6 +24949,13 @@ async def stream_agent_loop(
     _last_tool_result_sig = ""
     _unchanged_tool_result_rounds = 0
     _failed_tool_rounds = 0
+    # Signatures of the previous all-failed round's calls, and whether this
+    # round repeated one of them. The hard force-answer fires on blind retries
+    # at the configured limit; distinct consecutive failures (the agent is
+    # still adapting) get room up to twice the limit. The artifact-repair
+    # path keeps counting all consecutive failed rounds either way.
+    _prev_failed_round_sigs: set = set()
+    _blind_retry_round = False
     # Exact failed calls are not useful retries until some successful tool has
     # materially changed workspace state. This catches loops that include
     # planning prose or unrelated failures between identical commands.
@@ -37169,6 +37176,13 @@ async def stream_agent_loop(
         ):
             _artifact_failed_mutation_attempts = 0
         if _all_tool_results_failed:
+            _round_failed_sigs = {
+                _tool_call_signature(block.tool_type, block.content)
+                for block, record in zip(tool_blocks, tool_result_records)
+                if not tool_result_is_successful(record.get("result") or {})
+            }
+            _blind_retry_round = bool(_round_failed_sigs & _prev_failed_round_sigs)
+            _prev_failed_round_sigs = _round_failed_sigs
             _failed_tool_rounds += 1
             if (
                 _artifact_recovery_enabled
@@ -37180,6 +37194,8 @@ async def stream_agent_loop(
                 _artifact_failed_mutation_batches += 1
         else:
             _failed_tool_rounds = 0
+            _prev_failed_round_sigs = set()
+            _blind_retry_round = False
         if (
             _artifact_failed_mutation_attempts >= 3
             and not _force_answer
@@ -37318,7 +37334,7 @@ async def stream_agent_loop(
                         "or repeat a failed call."
                     ),
                 })
-            else:
+            elif _blind_retry_round or _failed_tool_rounds >= 2 * _failed_round_limit:
                 logger.warning(
                     "[agent] failed tool batches on %d consecutive rounds; forcing final answer",
                     _failed_tool_rounds,
@@ -37345,6 +37361,13 @@ async def stream_agent_loop(
                         "next safe step. Do not retry the same operation."
                     ),
                 })
+            else:
+                logger.info(
+                    "[agent] failed tool batches on %d consecutive rounds with "
+                    "distinct calls; allowing adaptation up to %d rounds",
+                    _failed_tool_rounds,
+                    2 * _failed_round_limit,
+                )
         if _runaway_pagination_sig and not _force_answer:
             logger.warning(
                 "[agent] repeated paginated web_fetch source on %d rounds; forcing final answer sig=%s",
