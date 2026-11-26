@@ -9,6 +9,7 @@ are display copies, never authority.
 from __future__ import annotations
 
 import hashlib
+import logging
 import json
 import os
 import secrets
@@ -33,6 +34,9 @@ if TYPE_CHECKING:
     from src.agent_runtime.owned_resources import BoundOwnedOperation
     from src.agent_runtime.process_resources import BoundProcessOperation
     from src.browser_identity import BoundBrowserOperation
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_APPROVAL_TTL_SECONDS = 10 * 60
@@ -102,6 +106,26 @@ def _canonical_digest(payload: dict[str, Any]) -> str:
         ensure_ascii=False,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _payload_field_digests(payload: dict[str, Any]) -> dict[str, str]:
+    """Per-field fingerprints so a claim mismatch can name the drifting field.
+
+    The sealed payload is only kept as a single digest, so when a claim fails
+    there is otherwise no way to tell whether the caller-supplied fields
+    drifted or a sealed authority/operation blob serialized differently.
+    """
+    digests: dict[str, str] = {}
+    for key, value in payload.items():
+        encoded = json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            default=str,
+        ).encode("utf-8")
+        digests[key] = hashlib.sha256(encoded).hexdigest()[:12]
+    return digests
 
 
 def document_content_digest(content: Any) -> str:
@@ -274,6 +298,10 @@ class ExactToolApproval:
         workspace: Any,
     ) -> bool:
         if self._claimed:
+            logger.warning(
+                "exact-approval claim rejected: approval %s was already claimed",
+                self.pending.approval_id,
+            )
             return False
         capabilities = capabilities_for_action(tool_name, content)
         effects = tuple(sorted(effect.value for effect in capabilities.effects))
@@ -307,7 +335,48 @@ class ExactToolApproval:
             process_operation=self.pending.process_operation,
             browser_operation=self.pending.browser_operation,
         )
-        return _canonical_digest(expected) == self.pending.digest
+        if _canonical_digest(expected) == self.pending.digest:
+            return True
+        # Diagnostic path (mismatch is rare and security-relevant): rebuild
+        # the payload from the sealed record alone. If the reconstruction
+        # still matches the sealed digest, the drift is in the caller-supplied
+        # fields (owner/session/tool/content/workspace) and the field
+        # fingerprints below name it; if it does not, a sealed blob
+        # (authority/operation) serialized differently than at create time.
+        reconstructed = _binding_payload(
+            owner=self.pending.owner,
+            session_id=self.pending.session_id,
+            origin_run_id=self.pending.origin_run_id,
+            tool_name=self.pending.tool_name,
+            content=self.pending.content,
+            workspace=self.pending.workspace,
+            document_id=self.pending.document_id,
+            document_version=self.pending.document_version,
+            document_digest=self.pending.document_digest,
+            external_untrusted_context_seen=(
+                self.pending.external_untrusted_context_seen
+            ),
+            selected_tools=self.pending.selected_tools,
+            continuation_query=self.pending.continuation_query,
+            effects=self.pending.effects,
+            result_integrity=self.pending.result_integrity,
+            request_authority=self.pending.request_authority,
+            resource_operation=self.pending.resource_operation,
+            backend_operation=self.pending.backend_operation,
+            owned_operation=self.pending.owned_operation,
+            process_operation=self.pending.process_operation,
+            browser_operation=self.pending.browser_operation,
+        )
+        logger.warning(
+            "exact-approval claim mismatch: approval=%s tool=%s "
+            "reconstruction_matches=%s expected_fields=%s sealed_fields=%s",
+            self.pending.approval_id,
+            self.pending.tool_name,
+            _canonical_digest(reconstructed) == self.pending.digest,
+            _payload_field_digests(expected),
+            _payload_field_digests(reconstructed),
+        )
+        return False
 
     def matches(
         self,
@@ -544,6 +613,14 @@ class ToolApprovalStore:
                 )
                 self._pending.pop(oldest_id, None)
             self._pending[pending.approval_id] = pending
+        logger.info(
+            "exact-approval sealed: id=%s tool=%s digest=%s workspace=%r fields=%s",
+            pending.approval_id,
+            pending.tool_name,
+            pending.digest[:16],
+            pending.workspace,
+            _payload_field_digests(payload),
+        )
         return pending
 
     def consume(
