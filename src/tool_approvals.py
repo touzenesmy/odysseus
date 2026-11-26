@@ -95,7 +95,12 @@ def _normalized_continuation_query(value: Any) -> str:
     # The query is server-derived from the interrupted run and already lives in
     # session history. Keep the pending copy bounded because approvals are held
     # in memory until consumed or expired.
-    return str(value or "").strip()[:_MAX_APPROVAL_CONTINUATION_QUERY_CHARS]
+    # Strip again after truncating: the claim side re-applies this normalization
+    # to the stored copy, so it must be idempotent. A whitespace char landing
+    # exactly on the truncation boundary otherwise changed the value (and with
+    # it the sealed digest) between create and claim, permanently rejecting the
+    # very approval the card was meant to admit.
+    return str(value or "").strip()[:_MAX_APPROVAL_CONTINUATION_QUERY_CHARS].strip()
 
 
 def _canonical_digest(payload: dict[str, Any]) -> str:

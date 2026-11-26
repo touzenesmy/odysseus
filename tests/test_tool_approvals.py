@@ -44,6 +44,43 @@ def _pending(store, **overrides):
     return store.create(**values)
 
 
+def test_continuation_query_normalization_is_idempotent_at_truncation_boundary():
+    from src.tool_approvals import _normalized_continuation_query
+
+    query = "q" * 3999 + " \n" + "tail" * 200  # whitespace on the 4000-char cut
+    once = _normalized_continuation_query(query)
+    assert once == _normalized_continuation_query(once)
+
+
+def test_long_continuation_query_approval_still_claims():
+    """A >4000-char continuation query truncated at whitespace must still match."""
+    store = ToolApprovalStore()
+    query = "q" * 3999 + " \n" + "x" * 500
+    pending = _pending(store, continuation_query=query)
+    grant = store.consume(
+        pending.approval_id,
+        decision="approve",
+        owner="alice",
+        session_id="session-1",
+    )
+
+    assert grant is not None
+    assert grant.matches(
+        owner="alice",
+        session_id="session-1",
+        tool_name="bash",
+        content="printf exact",
+        workspace=None,
+    )
+    assert grant.claim(
+        owner="alice",
+        session_id="session-1",
+        tool_name="bash",
+        content="printf exact",
+        workspace=None,
+    )
+
+
 def test_approval_is_bound_to_exact_action_and_claimed_once():
     store = ToolApprovalStore()
     pending = _pending(store)
