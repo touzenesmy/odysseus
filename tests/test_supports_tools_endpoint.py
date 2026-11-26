@@ -641,6 +641,16 @@ class TestSupportsToolsAndModelToolModesInteraction:
         assert schemas == []
 
 
+_PLAYWRIGHT_AVAILABLE = (
+    Path(__file__).resolve().parents[1] / "node_modules" / "playwright"
+).is_dir()
+
+
+@pytest.mark.skipif(
+    not _PLAYWRIGHT_AVAILABLE,
+    reason="browser harness imports playwright; node_modules not installed "
+    "in this worktree",
+)
 def test_browser_harness_port_selection_and_isolation():
     """Verify resolveAppPort and getEphemeralPort invariants in test_added_models_tools_toggle.mjs."""
     node = shutil.which("node")
